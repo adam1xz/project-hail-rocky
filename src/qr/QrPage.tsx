@@ -15,15 +15,11 @@ export function QrPage() {
   const [copied, setCopied] = useState<'app' | 'web' | null>(null);
 
   useEffect(() => {
-    // Get initial data if already available
     window.electronAPI?.getQrData?.().then((d: QrData | null) => {
       if (d) setData(d);
     });
-
-    // Listen for updates (backend port arrives async)
-    window.electronAPI?.onQrData?.((d: QrData) => {
-      setData(d);
-    });
+    // port is known async — update when backend prints it
+    window.electronAPI?.onQrData?.((d: QrData) => setData(d));
   }, []);
 
   useEffect(() => {
@@ -67,7 +63,6 @@ export function QrPage() {
         </span>
       </div>
 
-      {/* QR area */}
       <div style={{
         border: '1.5px solid #2e2e3c',
         borderRadius: 16,

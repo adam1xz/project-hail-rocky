@@ -11,8 +11,10 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: {
-        main: path.resolve(__dirname, 'index.html'),
+        main:     path.resolve(__dirname, 'index.html'),
         settings: path.resolve(__dirname, 'settings.html'),
+        launcher: path.resolve(__dirname, 'launcher.html'),
+        qr:       path.resolve(__dirname, 'qr.html'),
       },
     },
   },

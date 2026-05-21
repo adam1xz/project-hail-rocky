@@ -5,11 +5,18 @@ import { store } from './store';
 import { getCharacterWindow, repositionWindow } from './character-window';
 import { openSettings, getSettingsWindow } from './settings-window';
 import { rebuildMenu } from './tray';
+import { getCurrentQrData } from './qr-window';
 
 let pythonProcess: import('child_process').ChildProcess | null = null;
 let backendPort: number | null = null;
 
 export function registerIpcHandlers(spawnBackend: () => Promise<void>): void {
+
+  // --- App close (from launcher X button) ---
+  ipcMain.on('close-app', () => app.quit());
+
+  // --- QR data query ---
+  ipcMain.handle('get-qr-data', () => getCurrentQrData());
 
   // --- Click-through toggle ---
   ipcMain.on('set-interactive', (_e, interactive: boolean) => {

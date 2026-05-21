@@ -4,6 +4,7 @@ import { store } from './store';
 import { getCharacterWindow } from './character-window';
 import { openSettings } from './settings-window';
 import { getBackendPort } from './ipc-handlers';
+import { showQrWindow } from './qr-window';
 
 // ─── Tray i18n ────────────────────────────────────────────────────────────────
 type LangCode = 'en' | 'pl' | 'es' | 'de';
@@ -74,6 +75,12 @@ function tt(key: string): string {
 
 let tray: Tray | null = null;
 let isVisible = true;
+let _isMobileMode = false;
+
+export function setMobileMode(mobile: boolean): void {
+  _isMobileMode = mobile;
+  rebuildMenu();
+}
 
 export function createTray(): Tray {
   const iconPath = path.join(__dirname, '../public/tray-icon.png');
@@ -130,7 +137,17 @@ export function rebuildMenu(): void {
     },
   }));
 
-  const menu = Menu.buildFromTemplate([
+  const mobilePart: Electron.MenuItemConstructorOptions[] = _isMobileMode ? [
+    {
+      label: 'Show QR Code',
+      click: () => showQrWindow(),
+    },
+    { type: 'separator' },
+    {
+      label: tt('settings'),
+      click: () => openSettings(),
+    },
+  ] : [
     {
       label: isVisible ? tt('hide') : tt('show'),
       click: () => {
@@ -146,6 +163,9 @@ export function rebuildMenu(): void {
       label: tt('settings'),
       click: () => openSettings(),
     },
+  ];
+
+  const desktopOnlyItems: Electron.MenuItemConstructorOptions[] = _isMobileMode ? [] : [
     { type: 'separator' },
     {
       label: tt('pin'),
@@ -186,11 +206,13 @@ export function rebuildMenu(): void {
         },
       ],
     },
-    { type: 'separator' },
-    {
+  ];
+
+  const utilItems: Electron.MenuItemConstructorOptions[] = [
+    ...(_isMobileMode ? [] : [{
       label: tt('reset_anim'),
       click: () => getCharacterWindow()?.webContents.send('trigger-emote', 'default'),
-    },
+    } as Electron.MenuItemConstructorOptions]),
     {
       label: tt('clear_history'),
       click: () => {
@@ -202,6 +224,13 @@ export function rebuildMenu(): void {
       label: tt('restart'),
       click: () => { app.relaunch(); app.exit(0); },
     },
+  ];
+
+  const menu = Menu.buildFromTemplate([
+    ...mobilePart,
+    ...desktopOnlyItems,
+    { type: 'separator' },
+    ...utilItems,
     { type: 'separator' },
     { label: tt('quit'), click: () => app.exit(0) },
   ]);

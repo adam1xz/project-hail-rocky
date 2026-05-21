@@ -1,12 +1,6 @@
 import React, { useState } from 'react';
 import { Monitor, Smartphone, X } from 'lucide-react';
 
-declare global {
-  interface Window {
-    electronAPI: any;
-  }
-}
-
 export function Launcher() {
   const [hovered, setHovered] = useState<'desktop' | 'mobile' | null>(null);
   const [selected, setSelected] = useState<'desktop' | 'mobile' | null>(null);
@@ -33,7 +27,6 @@ export function Launcher() {
       position: 'relative',
       overflow: 'hidden',
     }}>
-      {/* subtle top-center glow */}
       <div style={{
         position: 'absolute',
         top: -60,
@@ -45,7 +38,6 @@ export function Launcher() {
         pointerEvents: 'none',
       }} />
 
-      {/* close button */}
       <button
         onClick={() => window.electronAPI?.closeApp()}
         style={{
@@ -77,7 +69,6 @@ export function Launcher() {
         <X size={13} />
       </button>
 
-      {/* title */}
       <div style={{
         fontFamily: 'CindieMono, monospace',
         fontSize: 26,
@@ -99,7 +90,6 @@ export function Launcher() {
         choose your mode
       </div>
 
-      {/* cards */}
       <div style={{
         display: 'flex',
         gap: 16,

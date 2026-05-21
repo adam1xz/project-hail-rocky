@@ -49,6 +49,12 @@ declare global {
       setActivityMode?:     (mode: string) => Promise<{ ok: boolean }>;
       onCustomAnimAdded?:   (cb: (data: { name: string; script: string }) => void) => void;
       removeAllListeners:   (ch: string) => void;
+      // Launcher
+      selectMode?:          (mode: 'desktop' | 'mobile') => void;
+      closeApp?:            () => void;
+      // QR window
+      getQrData?:           () => Promise<{ url: string; webUrl: string; host: string; port: number } | null>;
+      onQrData?:            (cb: (data: { url: string; webUrl: string; host: string; port: number }) => void) => void;
     };
   }
 }

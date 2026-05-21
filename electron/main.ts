@@ -5,7 +5,7 @@ import { spawn, ChildProcess } from 'child_process';
 import { createCharacterWindow, getCharacterWindow } from './character-window';
 import { createSettingsWindow } from './settings-window';
 import { createTray, setMobileMode } from './tray';
-import { registerIpcHandlers, setPythonProcess, setBackendPort } from './ipc-handlers';
+import { registerIpcHandlers, setPythonProcess, setBackendPort, getBackendPort } from './ipc-handlers';
 import { createLauncherWindow, closeLauncher } from './launcher-window';
 import { createQrWindow, setQrData } from './qr-window';
 import { store } from './store';
@@ -168,7 +168,20 @@ function switchToMobile(): void {
   closeLauncher();
   setMobileMode(true);
   createQrWindow(preloadPath);
+  createSettingsWindow(preloadPath);
   createTray();
+
+  // Backend may have already emitted PORT before the user picked mobile — seed QR data now
+  const port = getBackendPort();
+  if (port !== null) {
+    const host = getLanIp();
+    setQrData({
+      url: `rocky://connect?host=${host}&port=${port}`,
+      webUrl: `http://${host}:${port}/app`,
+      host,
+      port,
+    });
+  }
 }
 
 app.whenReady().then(async () => {

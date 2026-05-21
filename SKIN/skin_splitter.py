@@ -120,7 +120,7 @@ def extract_part(
     # Pixels that are both rock content AND in this part's nearest-color region.
     combined = cv2.bitwise_and(skin_content, color_region)
 
-    # Keep only the largest contour — each part is self-contained.
+    # Keep only the largest contour - each part is self-contained.
     contours, _ = cv2.findContours(combined, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
         return None, None

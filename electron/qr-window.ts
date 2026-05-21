@@ -18,7 +18,7 @@ export function createQrWindow(preloadPath: string): BrowserWindow {
     height: 500,
     resizable: false,
     frame: true,
-    title: 'Rocky — Mobile',
+    title: 'Rocky - Mobile',
     autoHideMenuBar: true,
     backgroundColor: '#111113',
     webPreferences: {

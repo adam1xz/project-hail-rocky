@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useState, useCallback } from 'react';
 
-// ── Themes ────────────────────────────────────────────────────────────────────
+// Themes
 
 const THEME_VARS: Record<string, Record<string, string>> = {
   night: {
@@ -56,7 +56,7 @@ function applyTheme(name: string) {
   Object.entries(vars).forEach(([k, v]) => root.style.setProperty(k, v));
 }
 
-// ── i18n ──────────────────────────────────────────────────────────────────────
+// i18n
 
 type LangCode = 'en' | 'pl' | 'es' | 'de';
 
@@ -368,7 +368,7 @@ const LANG_LABELS: Record<LangCode, string> = {
   en: 'English', pl: 'Polski', es: 'Español', de: 'Deutsch',
 };
 
-// ── Default Settings ──────────────────────────────────────────────────────────
+// Default Settings
 
 const DEFAULT_SETTINGS = {
   theme: 'night', skin: 'rocky', skinOpacity: 1.0, scale: 1.0,
@@ -391,7 +391,7 @@ const BUILTIN_ANIM_NAMES = new Set([
   'panic', 'clap', 'confused', 'chirp', 'harmonic',
 ]);
 
-// ── Tab Config ────────────────────────────────────────────────────────────────
+// Tab Config
 
 const TAB_IDS = ['general', 'appearance', 'animations', 'skins', 'ai', 'credits'] as const;
 type TabId = typeof TAB_IDS[number];
@@ -403,7 +403,7 @@ const CORNER_KEYS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'] as 
 
 const CONTEXT_STEPS = [4, 12, 30, 60, 128, 256, 512, 1048];
 
-// ── Icons ─────────────────────────────────────────────────────────────────────
+// Icons
 
 function HamburgerIcon() {
   return (
@@ -460,7 +460,7 @@ function TabIcon({ id }: { id: TabId }) {
   );
 }
 
-// ── UI Primitives ─────────────────────────────────────────────────────────────
+// UI Primitives
 
 function Tooltip({ text }: { text: string }) {
   const [show, setShow] = useState(false);
@@ -788,7 +788,7 @@ function SegmentedControl({ value, onChange, options }: {
   );
 }
 
-// ── Root Component ────────────────────────────────────────────────────────────
+// Root Component
 
 export default function SettingsApp() {
   const [tab, setTab]               = useState<TabId>('general');
@@ -906,7 +906,7 @@ export default function SettingsApp() {
       fontSize: 13, background: 'var(--bg-a)', color: 'var(--text-1)',
     }}>
 
-      {/* Sidebar — always absolute so it overlays content when expanded */}
+      {/* Sidebar - always absolute so it overlays content when expanded */}
       <div
         onClick={e => e.stopPropagation()}
         style={{
@@ -970,7 +970,7 @@ export default function SettingsApp() {
         </div>
       </div>
 
-      {/* Content — always full-width, offset by the collapsed 52px sidebar */}
+      {/* Content - always full-width, offset by the collapsed 52px sidebar */}
       <div
         style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', paddingLeft: 52 }}
         onClick={() => { if (sidebarOpen) setSidebarOpen(false); }}
@@ -1043,7 +1043,7 @@ export default function SettingsApp() {
   );
 }
 
-// ── Tab: General ──────────────────────────────────────────────────────────────
+// Tab: General
 
 function GeneralTab({ draft, set, t, lang, onResetAll }: {
   draft: any; set: (k: string, v: any) => void;
@@ -1136,7 +1136,7 @@ function GeneralTab({ draft, set, t, lang, onResetAll }: {
   );
 }
 
-// ── Tab: Appearance ───────────────────────────────────────────────────────────
+// Tab: Appearance
 
 function AppearanceTab({ draft, set, t, displays, isDev }: {
   draft: any; set: (k: string, v: any) => void;
@@ -1215,7 +1215,7 @@ function AppearanceTab({ draft, set, t, displays, isDev }: {
   );
 }
 
-// ── Tab: Animations ───────────────────────────────────────────────────────────
+// Tab: Animations
 
 function AnimationsTab({ draft, set, t, animations, isDev, importName, setImportName, importScript, setImportScript, onAnimationAdded, onDeleteAnimation }: {
   draft: any; set: (k: string, v: any) => void; t: (k: string) => string;
@@ -1350,7 +1350,7 @@ function AnimationsTab({ draft, set, t, animations, isDev, importName, setImport
   );
 }
 
-// ── Tab: Skins ────────────────────────────────────────────────────────────────
+// Tab: Skins
 
 function SkinsTab({ draft, set, t, isDev, skins, importName, setImportName, importFile, setImportFile,
   importStatus, setImportStatus, importing, setImporting }: {
@@ -1502,7 +1502,7 @@ function SkinsTab({ draft, set, t, isDev, skins, importName, setImportName, impo
   );
 }
 
-// ── AI Status Panel ───────────────────────────────────────────────────────────
+// AI Status Panel
 
 type DiagnoseResult = {
   ollama_running: boolean; model_found: boolean;
@@ -1625,7 +1625,7 @@ function AiStatusPanel({ t }: { t: (k: string) => string }) {
   );
 }
 
-// ── Tab: AI ───────────────────────────────────────────────────────────────────
+// Tab: AI
 
 function AiTab({ draft, set, t, isDev, ollamaModels, audioDevices, refreshModels, onClearHistory }: {
   draft: any; set: (k: string, v: any) => void; t: (k: string) => string;
@@ -1825,7 +1825,7 @@ function AiTab({ draft, set, t, isDev, ollamaModels, audioDevices, refreshModels
   );
 }
 
-// ── Tab: Credits ──────────────────────────────────────────────────────────────
+// Tab: Credits
 
 function GitHubIcon() {
   return (

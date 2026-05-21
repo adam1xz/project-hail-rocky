@@ -93,7 +93,7 @@ async function spawnBackend(): Promise<void> {
       pythonProc = null;
       setPythonProcess(null);
       if (!isQuitting && code !== 0) {
-        console.log('[backend] crashed — restarting in 3s...');
+        console.log('[backend] crashed, restarting in 3s...');
         setTimeout(() => spawnBackend().catch(console.error), 3000);
       }
     });
@@ -171,7 +171,7 @@ function switchToMobile(): void {
   createSettingsWindow(preloadPath);
   createTray();
 
-  // Backend may have already emitted PORT before the user picked mobile — seed QR data now
+  // Backend may have already emitted PORT before the user picked mobile - seed QR data now
   const port = getBackendPort();
   if (port !== null) {
     const host = getLanIp();
@@ -206,7 +206,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  // Keep running — tray keeps app alive after mode is selected
+  // Keep running - tray keeps app alive after mode is selected
   // Before mode selection: all windows closing = user closed launcher = quit
   if (currentMode === null) {
     app.quit();

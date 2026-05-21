@@ -96,20 +96,18 @@ const noise1D = (x: number): number => {
   while (leg.theta2_rest < -Math.PI) leg.theta2_rest += 2 * Math.PI;
 });
 
-// 2-Bone Inverse Kinematics Solver
 function solve2BoneIK(x0: number, y0: number, xT: number, yT: number, L1: number, L2: number, flip: boolean) {
   let dx = xT - x0;
   let dy = yT - y0;
   let D = Math.sqrt(dx * dx + dy * dy);
 
-  // Prevent division by zero
   if (D < 0.001) {
     D = 0.001;
     dx = 0.001;
     dy = 0;
   }
 
-  // Soft IK clamp â€” limb resists at max reach instead of hard-stopping
+  // Soft IK clamp - limb resists at max reach instead of hard-stopping
   const maxReach = L1 + L2;
   const softMargin = 15;
   const softZone = maxReach - softMargin;
@@ -142,7 +140,7 @@ function solve2BoneIK(x0: number, y0: number, xT: number, yT: number, L1: number
 }
 
 // extent = projection range along principal axis (consistent between perimeter & area sampling)
-// skew  = third central moment along axis (sign disambiguates Â±180Â° PCA ambiguity)
+// skew  = third central moment along axis (sign disambiguates +/-180deg PCA ambiguity)
 type ShapeMoments = { cx: number; cy: number; angle: number; extent: number; skew: number };
 
 // PCA on 200 uniformly-sampled SVG path points
@@ -174,7 +172,7 @@ function getSVGPathMoments(pathEl: SVGGeometryElement): ShapeMoments | null {
   } catch { return null; }
 }
 
-// PCA on non-transparent PNG pixels via canvas (two-pass: moments â†’ extent+skew)
+// PCA on non-transparent PNG pixels via canvas (two-pass: moments -> extent+skew)
 function getPNGMoments(url: string): Promise<(ShapeMoments & { W: number; H: number }) | null> {
   return new Promise(resolve => {
     const img = new Image();
@@ -222,7 +220,7 @@ function getPNGMoments(url: string): Promise<(ShapeMoments & { W: number; H: num
 
 // Aligns a skin PNG to its vector shape by matching centroids and principal axes.
 // Scale uses projection extent (consistent between perimeter & area), not eigenvalue spread.
-// 180Â° disambiguation uses skewness (third moment) sign comparison.
+// 180deg disambiguation uses skewness (third moment) sign comparison.
 function AutoSkinImage({ href, clipId, opacity = 1, flip = false }: {
   href?: string; clipId: string; opacity?: number; flip?: boolean;
 }) {
@@ -239,13 +237,13 @@ function AutoSkinImage({ href, clipId, opacity = 1, flip = false }: {
     getPNGMoments(href).then(png => {
       if (cancelled || !png || png.extent === 0) return;
 
-      // Â±Ï€ PCA ambiguity: pick the smallest absolute rotation first
+      // +/-pi PCA ambiguity: pick the smallest absolute rotation first
       let rot = svg.angle - png.angle;
       while (rot > Math.PI / 2) rot -= Math.PI;
       while (rot < -Math.PI / 2) rot += Math.PI;
 
-      // 180Â° flip check via skewness sign â€” only when both shapes are clearly asymmetric
-      // Threshold: normalized skewness > 10% of half-extentÂ³
+      // 180deg flip check via skewness sign - only when both shapes are clearly asymmetric
+      // Threshold: normalized skewness > 10% of half-extent^3
       const svgSkewNorm = Math.abs(svg.skew) / Math.pow(svg.extent * 0.5, 3);
       const pngSkewNorm = Math.abs(png.skew) / Math.pow(png.extent * 0.5, 3);
       if (svgSkewNorm > 0.10 && pngSkewNorm > 0.10 && (svg.skew > 0) !== (png.skew > 0)) {
@@ -463,7 +461,7 @@ export default function App() {
     const api = window.electronAPI;
     if (!api) return;
 
-    // Only these element IDs count as "over Rocky" — SVG background areas are excluded
+    // Only these element IDs count as "over Rocky" - SVG background areas are excluded
     const ROCKY_IDS = new Set([
       'body_main', 'back_elements',
       'leg1_main', 'leg1_foot',
@@ -1185,7 +1183,7 @@ export default function App() {
     const s = state.current;
     const avgFootX = (s.feet.leg1.x + s.feet.leg2.x + s.feet.leg3.x) / 3;
     const offsetX = s.body.x - avgFootX;
-    // Max Â±4 degrees, very subtle lean
+    // Max +/-4 degrees, very subtle lean
     const targetTilt = Math.max(-4, Math.min(4, offsetX * 0.04));
     s.body.tilt = (s.body.tilt || 0) + (targetTilt - (s.body.tilt || 0)) * 0.05;
     return s.body.tilt;
@@ -1263,18 +1261,18 @@ export default function App() {
         dragRef.current.part !== 'back_elements';
       const isBodyDrag = dragRef.current.isDragging && !isLimbDrag;
 
-      // Gravity applies whenever airborne — including during limb drag (pendulum hang)
+      // Gravity applies whenever airborne, including during limb drag (pendulum hang)
       if (!r.grounded && !isBodyDrag) {
         r.vy += GRAVITY * gravityScaleRef.current * rockyDt;
       }
 
       // During limb drag: horizontal air drag dampens the pendulum swing so it feels heavy.
-      // No vertical drag — gravity must remain the dominant vertical force.
+      // No vertical drag - gravity must remain the dominant vertical force.
       if (isLimbDrag && !r.grounded) {
         r.vx -= r.vx * 2.2 * rockyDt;
       }
 
-      // Airborne tracking and panic — suppressed while any drag is active
+      // Airborne tracking and panic - suppressed while any drag is active
       if (isBodyDrag || isLimbDrag) {
         r.airborneTime = 0;
         r.fallingAnimTriggered = false;
@@ -1292,7 +1290,7 @@ export default function App() {
         }
       }
 
-      // Integrate position — body drag anchors directly to cursor, everything else integrates freely
+      // Integrate position - body drag anchors directly to cursor, everything else integrates freely
       if (!isBodyDrag) {
         r.x += r.vx * rockyDt;
         r.y += r.vy * rockyDt;
@@ -1343,7 +1341,7 @@ export default function App() {
         if (impact > LANDING_THRESHOLD) triggerLandingSquash(impact);
 
         // Pendulum rope constraint: body hangs from cursor via the grabbed limb.
-        // Runs after wall checks — must re-clamp to walls after correction.
+        // Runs after wall checks - must re-clamp to walls after correction.
         if (isLimbDrag && dragRef.current.part) {
           const svgScale = s.svgScale;
           // Full-window mode shifts the SVG to a corner inside the stage; include that anchor.
@@ -1369,12 +1367,12 @@ export default function App() {
               const ny = ddy / dist;
 
               // Capped position correction: Rocky glides toward cursor, not teleports.
-              // 22px/frame max = ~1320px/s at 60fps — enough to counteract gravity.
+              // 22px/frame max = ~1320px/s at 60fps - enough to counteract gravity.
               const correction = Math.min(dist - maxReach_px, 22);
               r.x -= nx * correction;
               r.y -= ny * correction;
 
-              // Absorb outward velocity. No restitution — rope is rope, not elastic.
+              // Absorb outward velocity. No restitution - rope is rope, not elastic.
               const vn2 = r.vx * nx + r.vy * ny;
               if (vn2 > 0) {
                 r.vx -= vn2 * nx;
@@ -1407,7 +1405,7 @@ export default function App() {
       {
         const draggedLimbId = isLimbDrag ? dragRef.current.part!.replace('_foot', '') : null;
         const isAirborneLimbDrag = draggedLimbId !== null && !r.grounded;
-        // Per-limb hang depth (SVG units) — hand2 droops most since it normally points up
+        // Per-limb hang depth (SVG units) - hand2 droops most since it normally points up
         const HANG_Y: Record<string, number> = { hand1: 90, hand2: 130, leg1: 60, leg2: 55, leg3: 50 };
         const SP_K:   Record<string, number> = { hand1: 9,  hand2: 6,  leg1: 14, leg2: 12, leg3: 10 };
         const SP_D:   Record<string, number> = { hand1: 3.5, hand2: 2.5, leg1: 4.5, leg2: 4.0, leg3: 3.5 };
@@ -1459,8 +1457,8 @@ export default function App() {
       // Idle Breathing (layered noise replaces single sine)
       const breatheActive = !s.isFrozen && ((!isStudioMode) || (isPlayingSequence && s.sequenceBreathing));
       if (breatheActive) {
-        const breatheBase = noise1D(time * 0.5) * 4;   // Â±4px heave
-        const micro = noise1D(time * 3.7 + 100) * 1.0; // Â±1px tremor
+        const breatheBase = noise1D(time * 0.5) * 4;   // +/-4px heave
+        const micro = noise1D(time * 3.7 + 100) * 1.0; // +/-1px tremor
         const sway = noise1D(time * 0.2 + 200) * 2;   // subtle sway for tilt
         // In SVG, positive Y = downward; breathing oscillates around rest height
         s.physics.targetY = s.physics.restY + breatheBase + micro;
@@ -1900,7 +1898,7 @@ export default function App() {
       } else {
         dragRef.current.limbDragCursorX = e.clientX;
         dragRef.current.limbDragCursorY = e.clientY;
-        // Do not force grounded=false here — let the floor check handle it naturally.
+        // Do not force grounded=false here - let the floor check handle it naturally.
         // If Rocky was on the floor, he stays grounded until the constraint lifts him above it.
         // If Rocky was already airborne, grounded is already false.
       }
@@ -2043,7 +2041,7 @@ export default function App() {
         ? state.current.hands[limbId as keyof typeof state.current.hands]
         : state.current.feet[limbId as keyof typeof state.current.feet];
       const vel = state.current.limbVelocity[limbId as keyof typeof state.current.limbVelocity];
-      // Body already carries its natural pendulum velocity from physics — no explicit throw needed.
+      // Body already carries its natural pendulum velocity from physics - no explicit throw needed.
       if (vel && (Math.abs(vel.x) > 8 || Math.abs(vel.y) > 8)) {
         let cvx = vel.x * 0.22;
         let cvy = vel.y * 0.22;
@@ -2950,7 +2948,7 @@ export default function App() {
       >
       <div style={svgWrapperStyle}>
       <style>{`
-        /* ── Rocky speech bubble ─────────────────────────────── */
+        /* Rocky speech bubble */
         .sb-rocky-wrap {
           transform-origin: center bottom;
           filter: drop-shadow(5px 5px 0 #111);
@@ -2972,7 +2970,7 @@ export default function App() {
           position: relative;
           overflow: visible;
         }
-        /* ── User speech bubble ──────────────────────────────── */
+        /* User speech bubble */
         .sb-user-wrap {
           background: #ffffff;
           border: 2px solid #111;
@@ -2990,7 +2988,7 @@ export default function App() {
           will-change: transform, opacity;
           pointer-events: none;
         }
-        /* ── Shared animations ───────────────────────────────── */
+        /* Shared animations */
         @keyframes sb-appear {
           0%   { opacity: 0; transform: scale(0.28); }
           52%  { opacity: 1; transform: scale(1.09); }

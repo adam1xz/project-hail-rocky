@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Rocky AI Backend — FastAPI server providing STT + LLM + TTS.
+Rocky AI Backend - FastAPI server providing STT + LLM + TTS.
 Prints PORT:<n> to stdout once ready so Electron can connect.
 """
 import argparse
@@ -43,7 +43,7 @@ except ImportError:
     from fastapi.staticfiles import StaticFiles
     import uvicorn
 
-# ─── Argument Parsing ────────────────────────────────────────────────────────
+# Argument Parsing
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--voice-ref",       default="update/tts/_rocky_mono.wav")
@@ -56,7 +56,7 @@ parser.add_argument("--tts-device",      default="default")
 parser.add_argument("--lan",             action="store_true", help="Bind to 0.0.0.0 for LAN access")
 args = parser.parse_args()
 
-# ─── App State ───────────────────────────────────────────────────────────────
+# App State
 
 SAMPLE_RATE = 16000
 TTS_RATE    = 24000
@@ -81,7 +81,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Rocky Backend", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# Static file mounts — conditional on directory existence
+# Static file mounts - conditional on directory existence
 _backend_dir = Path(__file__).parent
 _skin_dir = _backend_dir / ".." / "public" / "extracted_pieces"
 _flutter_web_dir = _backend_dir / "flutter_web"
@@ -232,7 +232,7 @@ def should_process(text: str) -> bool:
         return False
     return True
 
-# ─── SSE Event Helpers ───────────────────────────────────────────────────────
+# SSE Event Helpers
 
 def push_event(evt: dict):
     event_queue.put(evt)
@@ -253,7 +253,7 @@ def pick_emote(text: str) -> Optional[str]:
             return emote
     return random.choice(["chirp", "nod", "wave"]) if random.random() < 0.3 else None
 
-# ─── Logging ──────────────────────────────────────────────────────────────────
+# Logging
 
 _log_dir = Path.home() / '.rocky'
 _log_dir.mkdir(exist_ok=True)
@@ -298,7 +298,7 @@ def log_conversation(user: str, raw_reply: str, spoken: str, emote: Optional[str
     lines.append("---")
     _write_log(f'conversation_{date}.log', '\n'.join(lines) + '\n')
 
-# ─── TTS ─────────────────────────────────────────────────────────────────────
+# TTS
 
 def load_tts():
     global tts_model, tts_voice
@@ -344,7 +344,7 @@ def speak_worker():
         speak(text)
         speak_queue.task_done()
 
-# ─── LLM ─────────────────────────────────────────────────────────────────────
+# LLM
 
 import urllib.request
 import urllib.error
@@ -455,7 +455,7 @@ def query_ollama(user_text: str) -> tuple:
     backend_log(f"[LLM] All attempts failed. Using fallback: {repr(fallback)}")
     return fallback, _fallback_metrics("all attempts failed")
 
-# ─── STT ─────────────────────────────────────────────────────────────────────
+# STT
 
 def load_stt():
     global stt_model_obj
@@ -565,7 +565,7 @@ def stt_loop():
                                 if text:
                                     print(f"[STT] Filtered noise: {repr(text)}", flush=True)
                                 else:
-                                    print("[STT] Empty transcription — ignoring", flush=True)
+                                    print("[STT] Empty transcription - ignoring", flush=True)
                                 push_state("idle")
                 time.sleep(0.005)
     except Exception as e:
@@ -598,7 +598,7 @@ def handle_utterance(text: str):
     if _bored:
         _bored = False
         push_event({"type": "wakeup"})
-        backend_log("[BORED] Waking up — sending wakeup event.")
+        backend_log("[BORED] Waking up - sending wakeup event.")
     raw_reply, metrics = query_ollama(text)
     spoken, explicit_anim = parse_reply(raw_reply)
     push_event({"type": "response", "text": spoken})
@@ -608,7 +608,7 @@ def handle_utterance(text: str):
     log_conversation(text, raw_reply, spoken, emote, metrics)
     speak_queue.put(spoken)
 
-# ─── API Routes ──────────────────────────────────────────────────────────────
+# API Routes
 
 @app.get("/status")
 def status():
@@ -905,7 +905,7 @@ async def websocket_endpoint(ws: WebSocket):
         if q in ws_queues:
             ws_queues.remove(q)
 
-# ─── Startup ──────────────────────────────────────────────────────────────────
+# Startup
 
 def find_free_port() -> int:
     with socket.socket() as s:
@@ -915,6 +915,6 @@ def find_free_port() -> int:
 if __name__ == "__main__":
     port = find_free_port()
     host = "0.0.0.0" if args.lan else "127.0.0.1"
-    backend_log(f"[START] Rocky backend v2 — Ollama={args.ollama_endpoint}  Model={args.ollama_model}  STT={args.stt_model}  Port={port}  Host={host}")
+    backend_log(f"[START] Rocky backend v2 - Ollama={args.ollama_endpoint}  Model={args.ollama_model}  STT={args.stt_model}  Port={port}  Host={host}")
     print(f"PORT:{port}", flush=True)
     uvicorn.run(app, host=host, port=port, log_level="warning")

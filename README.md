@@ -1,4 +1,4 @@
-# Project Hail Rocky — Desktop
+# Project Hail Rocky - Desktop
 
 Rocky is an animated alien from Andy Weir's *Project Hail Mary* who lives in the corner of your screen, listens to you through your mic, thinks with a local LLM, and talks back in a voice you'd recognize from the book. No cloud. No subscriptions. Everything runs on your machine.
 
@@ -9,9 +9,9 @@ He bounces around the screen. You can drag him, throw him against walls, watch h
 ## What's inside
 
 ```
-electron/          Electron main process — windows, tray, IPC, backend lifecycle
-src/               React + TypeScript renderer — Rocky's animator, settings UI
-AI/backend.py      FastAPI backend — STT (Whisper), LLM (Ollama), TTS (pocket_tts)
+electron/          Electron main process - windows, tray, IPC, backend lifecycle
+src/               React + TypeScript renderer - Rocky's animator, settings UI
+AI/backend.py      FastAPI backend - STT (Whisper), LLM (Ollama), TTS (pocket_tts)
 public/extracted_pieces/   Rocky's skin, ~50 PNG pieces
 public/assembly_data.json  Affine transform matrices for skin assembly
 SKIN/              Skin tooling (splitter, importer for custom skins)
@@ -49,17 +49,17 @@ On startup a small launcher appears. Pick **Desktop** to run Rocky on your scree
 
 Electron spawns `AI/backend.py` as a subprocess. The backend prints `PORT:<n>` to stdout once the models are loaded; Electron catches that and opens an SSE event stream for real-time events (emotes, AI state, responses, transcriptions). Settings changes go back to the backend over HTTP POST.
 
-Rocky's animation runs in the browser renderer at 60fps via `requestAnimationFrame`. The physics engine — gravity, floor/wall bounce, limb spring ragdoll, 2-bone IK — is all in `src/App.tsx` and runs entirely client-side. Backend events get forwarded from the main process to the character window via Electron IPC.
+Rocky's animation runs in the browser renderer at 60fps via `requestAnimationFrame`. The physics engine (gravity, floor/wall bounce, limb spring ragdoll, 2-bone IK) is all in `src/App.tsx` and runs entirely client-side. Backend events get forwarded from the main process to the character window via Electron IPC.
 
 The voice is a clone built with `pocket_tts`, trained on Rocky's speech patterns. It plays through your default audio output on the desktop, or streams WAV bytes to a connected phone.
 
 ## Skin system
 
-Rocky's body is ~50 PNG pieces. Each piece has a world-space affine transform matrix stored in `assembly_data.json`. The renderer composites them in z-order, applying per-group IK transforms on top so limbs actually move. Custom skins can be imported through Settings — drop a PNG in the right format and the splitter in `SKIN/` does the rest.
+Rocky's body is ~50 PNG pieces. Each piece has a world-space affine transform matrix stored in `assembly_data.json`. The renderer composites them in z-order, applying per-group IK transforms on top so limbs actually move. Custom skins can be imported through Settings. Drop a PNG in the right format and the splitter in `SKIN/` does the rest.
 
 ## System tray
 
-Rocky runs headless-ish — the character window has no taskbar entry. The tray icon gives you: hide/show, settings, pin to top, skin switcher, activity modes (active/quiet/sleep), clear AI history, restart, quit.
+Rocky runs headless-ish; the character window has no taskbar entry. The tray icon gives you: hide/show, settings, pin to top, skin switcher, activity modes (active/quiet/sleep), clear AI history, restart, quit.
 
 ## Mobile
 

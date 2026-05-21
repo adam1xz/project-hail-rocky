@@ -6,7 +6,7 @@ import { openSettings } from './settings-window';
 import { getBackendPort } from './ipc-handlers';
 import { showQrWindow } from './qr-window';
 
-// ─── Tray i18n ────────────────────────────────────────────────────────────────
+// Tray i18n
 type LangCode = 'en' | 'pl' | 'es' | 'de';
 
 const TRAY_TR: Record<LangCode, Record<string, string>> = {

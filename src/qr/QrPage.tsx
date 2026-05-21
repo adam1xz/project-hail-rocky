@@ -18,7 +18,7 @@ export function QrPage() {
     window.electronAPI?.getQrData?.().then((d: QrData | null) => {
       if (d) setData(d);
     });
-    // port is known async — update when backend prints it
+    // port is known async - update when backend prints it
     window.electronAPI?.onQrData?.((d: QrData) => setData(d));
   }, []);
 
@@ -98,7 +98,7 @@ export function QrPage() {
       {data ? (
         <>
           <p style={{ fontSize: 11, color: '#6e6252', marginBottom: 14, textAlign: 'center', lineHeight: 1.5 }}>
-            Scan with the Rocky app — or open the<br />
+            Scan with the Rocky app, or open the<br />
             web version in any browser on your phone
           </p>
 

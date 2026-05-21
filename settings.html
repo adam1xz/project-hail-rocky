@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rocky Settings</title>
+    <style>
+      :root {
+        --bg-a:         #111113;
+        --bg-b:         #1c1c22;
+        --bg-c:         #0d0d10;
+        --border:       #2e2e3c;
+        --text-1:       #f4eedd;
+        --text-2:       #b8a98a;
+        --text-3:       #6e6252;
+        --accent:       #c9a84c;
+        --accent-hover: #d4b860;
+        --accent-dim:   rgba(201,168,76,0.12);
+        --accent-dark:  #0d0d10;
+        --danger:       #c94c4c;
+        --success:      #4caa6e;
+      }
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { height: 100%; background: var(--bg-a); color: var(--text-1); overflow: hidden; }
+    </style>
+  </head>
+  <body>
+    <div id="settings-root"></div>
+    <script type="module" src="/src/settings/index.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,35 @@
+# Build outputs
+node_modules/
+dist/
+dist-electron/
+coverage/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Dev artifacts
+SKIN/extracted_pieces/
+SKIN/Gemini rocky*.png
+SKIN/New Project.*
+SKIN/run.bat
+
+# Claude Code internal
+.claude/
+
+# Temp / one-off outputs
+listf_output.txt
+metadata.json
+update/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
+.env*
+!.env.example

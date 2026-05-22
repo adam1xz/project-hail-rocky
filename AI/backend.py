@@ -108,6 +108,7 @@ _tts_volume           = 1.0
 _system_prompt_suffix = ""
 _bored                = False
 _last_activity        = 0.0
+mobile_connected      = False
 BORED_TIMEOUT  = 120.0
 
 VALID_ANIMS = {
@@ -328,9 +329,12 @@ def speak(text: str):
         if _tts_volume != 1.0:
             audio_np = audio_np * _tts_volume
         push_state("speaking")
-        device = None if args.tts_device == "default" else args.tts_device
-        sd.play(audio_np, samplerate=TTS_RATE, device=device)
-        sd.wait()
+        if not mobile_connected:
+            device = None if args.tts_device == "default" else args.tts_device
+            sd.play(audio_np, samplerate=TTS_RATE, device=device)
+            sd.wait()
+        else:
+            time.sleep(len(audio_np) / TTS_RATE)
         push_state("idle")
     except Exception as e:
         print(f"[TTS] Error: {e}", flush=True)
@@ -869,6 +873,7 @@ async def websocket_endpoint(ws: WebSocket):
                 await ws.send_json(evt)
 
         async def receiver():
+            global mobile_connected
             while True:
                 data = await ws.receive_text()
                 try:
@@ -886,11 +891,13 @@ async def websocket_endpoint(ws: WebSocket):
                         push_event({"type": "transcription", "text": text})
                         threading.Thread(target=handle_utterance, args=(text,), daemon=True).start()
                 elif t == "mobile_connected":
+                    mobile_connected = True
                     if stt_active:
                         _stop_stt.set()
                         stt_active = False
                         push_event({"type": "mobile_mode", "active": True})
                 elif t == "mobile_disconnected":
+                    mobile_connected = False
                     if not stt_active:
                         _stop_stt.clear()
                         stt_active = True

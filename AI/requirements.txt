@@ -3,6 +3,6 @@ uvicorn[standard]>=0.29.0
 numpy>=1.26.0
 sounddevice>=0.4.6
 soundfile>=0.12.1
-pocket-tts>=0.1.0
-moonshine-onnx>=0.1.0
+pocket-tts>=2.1.0
+useful-moonshine-onnx
 faster-whisper>=1.0.0

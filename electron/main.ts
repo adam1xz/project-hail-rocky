@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import os from 'os';
 import path from 'path';
+import fs from 'fs';
 import { spawn, ChildProcess } from 'child_process';
 import { createCharacterWindow, getCharacterWindow } from './character-window';
 import { createSettingsWindow } from './settings-window';
@@ -12,6 +13,11 @@ import { store } from './store';
 
 const isDev = process.env.DEV === 'true';
 const preloadPath = path.join(__dirname, 'preload.js');
+
+function getArg(name: string): string | null {
+  const i = process.argv.indexOf(name);
+  return i >= 0 && i + 1 < process.argv.length ? process.argv[i + 1] : null;
+}
 
 let pythonProc: ChildProcess | null = null;
 let isQuitting = false;
@@ -33,13 +39,15 @@ async function spawnBackend(): Promise<void> {
     pythonProc = null;
   }
 
+  const installDir = isDev ? null : path.dirname(path.dirname(process.execPath));
+
   const backendPath = isDev
     ? path.join(__dirname, '../AI/backend.py')
-    : path.join(process.resourcesPath, 'AI/backend.py');
+    : path.join(installDir!, 'backend/AI/backend.py');
 
   const voiceRef = isDev
     ? path.join(__dirname, '../update/tts/_rocky_mono.wav')
-    : path.join(process.resourcesPath, 'update/tts/_rocky_mono.wav');
+    : path.join(installDir!, 'update/tts/_rocky_mono.wav');
 
   const s = store.store;
   const args = [
@@ -54,8 +62,11 @@ async function spawnBackend(): Promise<void> {
     '--lan',  // always bind to 0.0.0.0 for mobile mode readiness
   ];
 
+  const venvPython = isDev ? null : path.join(installDir!, 'backend/venv/Scripts/python.exe');
+  const python = (!isDev && venvPython && fs.existsSync(venvPython)) ? venvPython : 'python';
+
   try {
-    pythonProc = spawn('python', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    pythonProc = spawn(python, args, { stdio: ['ignore', 'pipe', 'pipe'] });
     setPythonProcess(pythonProc);
 
     pythonProc.stdout?.on('data', (chunk: Buffer) => {
@@ -66,7 +77,6 @@ async function spawnBackend(): Promise<void> {
           setBackendPort(port);
           startEventStream(port);
 
-          // If we're already in mobile mode, send QR data now that port is known
           if (currentMode === 'mobile') {
             const host = getLanIp();
             setQrData({
@@ -193,10 +203,20 @@ app.whenReady().then(async () => {
     else switchToMobile();
   });
 
-  createLauncherWindow(preloadPath);
+  // If AHK launcher already started the backend and chose a mode, skip our own launcher
+  const launcherPort = getArg('--backend-port');
+  const launcherMode = getArg('--mode');
 
-  // Backend starts immediately so models load during mode selection
-  spawnBackend().catch(console.error);
+  if (launcherPort && launcherMode) {
+    const port = parseInt(launcherPort, 10);
+    setBackendPort(port);
+    startEventStream(port);
+    if (launcherMode === 'desktop') switchToDesktop();
+    else if (launcherMode === 'mobile') switchToMobile();
+  } else {
+    createLauncherWindow(preloadPath);
+    spawnBackend().catch(console.error);
+  }
 
   app.on('activate', () => {
     if (currentMode === 'desktop' && BrowserWindow.getAllWindows().filter(w => !w.isDestroyed()).length === 0) {
@@ -206,8 +226,6 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  // Keep running - tray keeps app alive after mode is selected
-  // Before mode selection: all windows closing = user closed launcher = quit
   if (currentMode === null) {
     app.quit();
   }

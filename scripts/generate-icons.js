@@ -28,7 +28,6 @@ async function main() {
 
   const svgBuf = Buffer.from(prepSvg(fs.readFileSync(SVG_PATH, 'utf8')));
 
-  // Render at high resolution then trim transparent padding so Rocky fills the frame
   const masterBuf = await sharp(svgBuf, { density: 300 })
     .resize(1024, 1024, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
     .png().toBuffer();

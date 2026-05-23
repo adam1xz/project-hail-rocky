@@ -258,6 +258,16 @@ def main():
     skins_json = script_dir.parent / 'public' / 'skins' / 'skins.json'
     update_skins_json(skins_json, skin_id, display_name)
 
+    # Generate layout.json so the Flutter companion app can render this skin
+    # without needing a runtime PCA pass. Kept in this script so every import
+    # path (Electron IPC, manual CLI) produces a synced layout file.
+    try:
+        from skin_layout import generate_for_skin
+        layout_path = generate_for_skin(output_dir)
+        print(f"Wrote layout    : {layout_path}")
+    except Exception as e:
+        print(f"WARN: layout.json generation failed: {e}")
+
     print(f"\nDone! Start the dev server and select '{display_name}' from the Skin dropdown.")
 
 

@@ -53,6 +53,7 @@ export function createCharacterWindow(preloadPath: string): BrowserWindow {
       preload: preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
+      webSecurity: false,
     },
   });
 

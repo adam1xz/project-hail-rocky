@@ -36,7 +36,6 @@ export function createQrWindow(preloadPath: string): BrowserWindow {
     win.loadFile(path.join(__dirname, '../dist/qr.html'));
   }
 
-  // Hide instead of close so tray can reopen it
   win.on('close', (e) => {
     e.preventDefault();
     win?.hide();

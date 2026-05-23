@@ -18,7 +18,6 @@ export function QrPage() {
     window.electronAPI?.getQrData?.().then((d: QrData | null) => {
       if (d) setData(d);
     });
-    // port is known async - update when backend prints it
     window.electronAPI?.onQrData?.((d: QrData) => setData(d));
   }, []);
 
@@ -102,7 +101,6 @@ export function QrPage() {
             web version in any browser on your phone
           </p>
 
-          {/* App URL row */}
           <UrlRow
             label="App link"
             value={data.url}
@@ -112,7 +110,6 @@ export function QrPage() {
 
           <div style={{ height: 8 }} />
 
-          {/* Web URL row */}
           <UrlRow
             label="Web link"
             value={data.webUrl}

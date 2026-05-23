@@ -13,7 +13,6 @@ const LIMB_RECOVERY     = 7.0;
 const ROPE_RESTITUTION  = 0.0;
 const LIMB_IDS = ['hand1', 'hand2', 'leg1', 'leg2', 'leg3'] as const;
 
-// --- RIG DEFINITION ---
 const RIG = {
   body: { pivot: { x: 295.1, y: 392.2 } },
   legs: [
@@ -62,11 +61,6 @@ const RIG = {
   ]
 };
 
-// --- ASSEMBLED SKIN DATA ---
-// Data is now loaded dynamically via assembly_data.json
-
-
-// --- NOISE HELPER (Perlin-style, no external dep) ---
 const _noisePerm = (() => {
   const p = Array.from({ length: 256 }, (_, i) => i);
   for (let i = 255; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[p[i], p[j]] = [p[j], p[i]]; }
@@ -79,7 +73,6 @@ const noise1D = (x: number): number => {
   return _ngrad(_noisePerm[X], xf) + (_ngrad(_noisePerm[X + 1], xf - 1) - _ngrad(_noisePerm[X], xf)) * u;
 };
 
-// Precalculate lengths and rest angles for IK
 [...RIG.legs, ...RIG.hands].forEach(leg => {
   const dx1 = leg.kneePivot.x - leg.thighPivot.x;
   const dy1 = leg.kneePivot.y - leg.thighPivot.y;
@@ -107,7 +100,6 @@ function solve2BoneIK(x0: number, y0: number, xT: number, yT: number, L1: number
     dy = 0;
   }
 
-  // Soft IK clamp - limb resists at max reach instead of hard-stopping
   const maxReach = L1 + L2;
   const softMargin = 15;
   const softZone = maxReach - softMargin;
@@ -139,11 +131,7 @@ function solve2BoneIK(x0: number, y0: number, xT: number, yT: number, L1: number
   return { theta1, theta2 };
 }
 
-// extent = projection range along principal axis (consistent between perimeter & area sampling)
-// skew  = third central moment along axis (sign disambiguates +/-180deg PCA ambiguity)
 type ShapeMoments = { cx: number; cy: number; angle: number; extent: number; skew: number };
-
-// PCA on 200 uniformly-sampled SVG path points
 function getSVGPathMoments(pathEl: SVGGeometryElement): ShapeMoments | null {
   try {
     const len = pathEl.getTotalLength();
@@ -172,7 +160,6 @@ function getSVGPathMoments(pathEl: SVGGeometryElement): ShapeMoments | null {
   } catch { return null; }
 }
 
-// PCA on non-transparent PNG pixels via canvas (two-pass: moments -> extent+skew)
 function getPNGMoments(url: string): Promise<(ShapeMoments & { W: number; H: number }) | null> {
   return new Promise(resolve => {
     const img = new Image();
@@ -218,9 +205,6 @@ function getPNGMoments(url: string): Promise<(ShapeMoments & { W: number; H: num
   });
 }
 
-// Aligns a skin PNG to its vector shape by matching centroids and principal axes.
-// Scale uses projection extent (consistent between perimeter & area), not eigenvalue spread.
-// 180deg disambiguation uses skewness (third moment) sign comparison.
 function AutoSkinImage({ href, clipId, opacity = 1, flip = false }: {
   href?: string; clipId: string; opacity?: number; flip?: boolean;
 }) {
@@ -237,13 +221,10 @@ function AutoSkinImage({ href, clipId, opacity = 1, flip = false }: {
     getPNGMoments(href).then(png => {
       if (cancelled || !png || png.extent === 0) return;
 
-      // +/-pi PCA ambiguity: pick the smallest absolute rotation first
       let rot = svg.angle - png.angle;
       while (rot > Math.PI / 2) rot -= Math.PI;
       while (rot < -Math.PI / 2) rot += Math.PI;
 
-      // 180deg flip check via skewness sign - only when both shapes are clearly asymmetric
-      // Threshold: normalized skewness > 10% of half-extent^3
       const svgSkewNorm = Math.abs(svg.skew) / Math.pow(svg.extent * 0.5, 3);
       const pngSkewNorm = Math.abs(png.skew) / Math.pow(png.extent * 0.5, 3);
       if (svgSkewNorm > 0.10 && pngSkewNorm > 0.10 && (svg.skew > 0) !== (png.skew > 0)) {
@@ -251,7 +232,6 @@ function AutoSkinImage({ href, clipId, opacity = 1, flip = false }: {
         if (rot > Math.PI) rot -= 2 * Math.PI;
       }
 
-      // Uniform scale: ratio of projection extents (SVG units per PNG pixel)
       const s = svg.extent / png.extent;
       if (flip) rot += Math.PI;
       setRender({
@@ -338,29 +318,27 @@ export default function App() {
   const [charW, setCharW] = useState(750);
   const [charH, setCharH] = useState(860);
 
-  // Fetch Skin Data
   useEffect(() => {
-    fetch('/assembly_data.json')
+    fetch('./assembly_data.json')
       .then(res => res.json())
       .then(data => setSkinData(data))
       .catch(err => console.error("Failed to load skin data", err));
   }, []);
 
   useEffect(() => {
-    fetch('/skins/skins.json').then(r => r.json()).then(setAvailableSkins).catch(() => {});
+    fetch('./skins/skins.json').then(r => r.json()).then(setAvailableSkins).catch(() => {});
   }, []);
 
   useEffect(() => {
-    fetch(`/skins/${selectedSkin}/manifest.json`)
+    fetch(`./skins/${selectedSkin}/manifest.json`)
       .then(r => r.json())
       .then(setSkinManifest)
       .catch(() => {});
   }, [selectedSkin]);
 
   const skinUrl = (part: string): string | undefined =>
-    skinManifest[part] ? `/skins/${selectedSkin}/${skinManifest[part]}` : undefined;
+    skinManifest[part] ? `./skins/${selectedSkin}/${skinManifest[part]}` : undefined;
 
-  // --- ELECTRON IPC INTEGRATION ---
   useEffect(() => {
     const api = window.electronAPI;
     if (!api) return;
@@ -456,12 +434,9 @@ export default function App() {
     };
   }, []);
 
-  // Click-through detection: notify main process when hovering over Rocky
   useEffect(() => {
     const api = window.electronAPI;
     if (!api) return;
-
-    // Only these element IDs count as "over Rocky" - SVG background areas are excluded
     const ROCKY_IDS = new Set([
       'body_main', 'back_elements',
       'leg1_main', 'leg1_foot',
@@ -506,7 +481,6 @@ export default function App() {
     };
   }, []);
 
-  // --- ANIMATION CONFIGURATION ---
   const ANIM_CONFIG = {
     pretransitionSec: 0.7,
     pretransitionMs: 700,
@@ -554,7 +528,6 @@ export default function App() {
   const emoteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const triggerAnimRef = useRef<(name: string) => void>(() => { });
-  // --- END CONFIGURATION ---
 
   const [keyframes, setKeyframes
   ] = useState<Keyframe[]>([
@@ -1079,7 +1052,6 @@ export default function App() {
   const [promptInput, setPromptInput] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Core Animation State (Mutable for 60fps performance)
   const state = useRef({
     body: { x: 295.1, y: 393.4, tilt: 0 },
     feet: {
@@ -1096,7 +1068,6 @@ export default function App() {
     sequenceBreathing: false,
     isFrozen: false,
     isStepping: { leg1: false, leg2: false, leg3: false },
-    // Physics spring body
     physics: {
       body: { x: 295.1, y: 393.4, vx: 0, vy: 0 },
       targetY: 393.4,
@@ -1105,7 +1076,6 @@ export default function App() {
       damping: 12,
       restY: 393.4,
     },
-    // Per-limb drag velocity for spring-coast on release
     limbVelocity: {
       leg1: { x: 0, y: 0 }, leg2: { x: 0, y: 0 }, leg3: { x: 0, y: 0 },
       hand1: { x: 0, y: 0 }, hand2: { x: 0, y: 0 },
@@ -1158,13 +1128,11 @@ export default function App() {
 
     activeAnimations.current = [];
     stopProceduralAnimations();
-    // Reset physics spring so interrupted animations don't leave a stuck targetY
     state.current.physics.targetY = state.current.physics.restY;
     state.current.physics.body.vy = 0;
     playingSequenceIdRef.current = null;
   };
 
-  // --- PHYSICS HELPERS ---
   const integratePhysics = (dt: number) => {
     const p = state.current.physics;
     const disp = p.body.y - p.targetY;
@@ -1183,7 +1151,6 @@ export default function App() {
     const s = state.current;
     const avgFootX = (s.feet.leg1.x + s.feet.leg2.x + s.feet.leg3.x) / 3;
     const offsetX = s.body.x - avgFootX;
-    // Max +/-4 degrees, very subtle lean
     const targetTilt = Math.max(-4, Math.min(4, offsetX * 0.04));
     s.body.tilt = (s.body.tilt || 0) + (targetTilt - (s.body.tilt || 0)) * 0.05;
     return s.body.tilt;
@@ -1232,7 +1199,6 @@ export default function App() {
     }
   };
 
-  // --- RENDER LOOP ---
   useEffect(() => {
     let frameId: number;
     let lastRockyTime = performance.now();
@@ -1247,7 +1213,6 @@ export default function App() {
       const dt = 1 / 60;
       integratePhysics(dt);
 
-      // --- Rocky physics integrator ---
       const rockyDt = Math.min((now - lastRockyTime) / 1000, 1 / 30);
       lastRockyTime = now;
       const r = s.rocky;
@@ -1732,8 +1697,7 @@ export default function App() {
         }
 
       }
-      
-      // --- SKIN RENDERING LOGIC ---
+
       try {
         if (skinData.length > 0 && rootGroup && svgRef.current) {
           const rootCTM = rootGroup.getCTM()!;
@@ -1776,7 +1740,6 @@ export default function App() {
     return () => cancelAnimationFrame(frameId);
   }, [isStudioMode, isPlayingSequence, skinData]);
 
-  // Initialize the Idle System
   useEffect(() => {
     const canPlayIdle = () =>
       state.current.rocky.grounded &&
@@ -1821,7 +1784,6 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isPlayingSequence]);
 
-  // --- INTERACTION ---
   const getSVGPoint = (e: React.PointerEvent) => {
     if (!svgRef.current) return { x: 0, y: 0 };
     const pt = svgRef.current.createSVGPoint();
@@ -2124,7 +2086,6 @@ export default function App() {
     e.target.value = '';
   };
 
-  // --- STUDIO MODE FUNCTIONS ---
   const saveKeyframe = (name: string) => {
     const s = state.current;
     const newKeyframe: Keyframe = {
@@ -2258,7 +2219,6 @@ export default function App() {
     stopAnimations();
   };
 
-  // --- ANIMATIONS ---
   const resetToDefault = (duration = 0.3, ease: any = "easeInOut", fromSequence = false) => {
     if (!fromSequence) stopAnimations();
     const s = state.current;
@@ -2879,7 +2839,6 @@ export default function App() {
         }, ANIM_CONFIG.pretransitionMs);
       }
     }
-    // ---- Auto-Return & Idle Scheduler ----
     const emoteConf = EMOTE_CONFIG[animName] || EMOTE_CONFIG.default;
 
     if (emoteConf.mode !== 'hold') {
@@ -2906,7 +2865,6 @@ export default function App() {
     }
   };
 
-  // Keep refs in sync
   useEffect(() => {
     sequencesRef.current = sequences;
     keyframesRef.current = keyframes;

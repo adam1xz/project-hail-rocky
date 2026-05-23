@@ -1,6 +1,7 @@
 param(
-    [string]$Version = "1.0.0",
+    [string]$Version    = "1.0.0",
     [switch]$SkipBuild,
+    [switch]$SkipAssets,
     [switch]$SkipLauncher
 )
 
@@ -18,23 +19,41 @@ function Fail($msg) { Write-Host "    FAIL: $msg" -ForegroundColor Red; exit 1 }
 Step "Checking prerequisites"
 
 $iscc = $null
-$issccPaths = @(
+$isccCmd = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+$isccFromPath = if ($isccCmd) { $isccCmd.Source } else { $null }
+foreach ($p in @(
     "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
     "C:\Program Files\Inno Setup 6\ISCC.exe",
-    (Get-Command ISCC.exe -ErrorAction SilentlyContinue)?.Source
-)
-foreach ($p in $issccPaths) {
+    $isccFromPath
+)) {
     if ($p -and (Test-Path $p)) { $iscc = $p; break }
 }
 if (-not $iscc) {
-    Fail "Inno Setup 6 not found. Download from https://jrsoftware.org/isinfo.php"
+    Fail "Inno Setup 6 not found.`nDownload from https://jrsoftware.org/isinfo.php"
 }
 OK "Inno Setup: $iscc"
 
 if (-not (Test-Path "node_modules")) { Fail "Run 'npm install' first" }
 OK "node_modules present"
 
-# ---- 2. Build Electron app ----
+# ---- 2. Generate installer assets (side-panel.png + icon.ico copy) ----
+
+if (-not $SkipAssets) {
+    Step "Generating installer assets"
+    node installer/generate-installer-assets.js
+    if ($LASTEXITCODE -ne 0) { Fail "Asset generation failed" }
+    OK "installer/assets/ updated"
+} else {
+    Warn "Skipping asset generation (--SkipAssets)"
+    if (-not (Test-Path "installer\assets\side-panel.png")) {
+        Warn "installer\assets\side-panel.png missing - installer will have no wizard art"
+    }
+    if (-not (Test-Path "installer\assets\icon.ico")) {
+        Warn "installer\assets\icon.ico missing - run 'npm run generate-icons' first"
+    }
+}
+
+# ---- 3. Build Electron app ----
 
 if (-not $SkipBuild) {
     Step "Building Vite frontend"
@@ -52,23 +71,23 @@ if (-not $SkipBuild) {
     npx electron-builder --dir --config.directories.output=dist-release
     if ($LASTEXITCODE -ne 0) { Fail "electron-builder failed" }
 
-    $unpackedDir = Get-ChildItem "dist-release" -Filter "win-unpacked" -Directory | Select-Object -First 1
+    $unpackedDir = Get-ChildItem "dist-release" -Filter "win-unpacked" -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $unpackedDir) { Fail "dist-release\win-unpacked not found after build" }
-    OK "Electron app packaged: $($unpackedDir.FullName)"
+    OK "Electron app at: $($unpackedDir.FullName)"
 } else {
-    Warn "Skipping build (--SkipBuild)"
+    Warn "Skipping Electron build (--SkipBuild)"
     if (-not (Test-Path "dist-release\win-unpacked")) {
         Fail "dist-release\win-unpacked missing and --SkipBuild set"
     }
 }
 
-# ---- 3. Compile AHK launcher ----
+# ---- 4. Compile AHK launcher ----
 
 if (-not $SkipLauncher) {
     Step "Compiling AHK launcher"
     & "$ProjectRoot\launcher\compile-launcher.ps1"
     if ($LASTEXITCODE -ne 0) { Fail "AHK compile failed" }
-    OK "PHR.exe compiled"
+    OK "launcher\PHR.exe compiled"
 } else {
     Warn "Skipping launcher compile (--SkipLauncher)"
     if (-not (Test-Path "launcher\PHR.exe")) {
@@ -76,46 +95,7 @@ if (-not $SkipLauncher) {
     }
 }
 
-# ---- 4. Generate QR code image ----
-
-Step "Generating QR code image"
-$qrTarget = "$ProjectRoot\installer\assets\qr-mobile.bmp"
-$qrUrl    = "https://github.com/adam1xz/project-hail-rocky-app/releases"
-try {
-    # Use Python + qrcode library if available
-    $qrScript = @"
-import sys
-try:
-    import qrcode
-    from PIL import Image
-    qr = qrcode.make('$qrUrl')
-    qr.convert('RGB').save(r'$qrTarget', 'BMP')
-    print('QR generated')
-except ImportError:
-    print('qrcode not available - skipping QR image generation')
-    sys.exit(1)
-"@
-    $qrScript | python - 2>&1 | Write-Host
-    if (Test-Path $qrTarget) { OK "QR image generated" }
-} catch {
-    Warn "Could not generate QR image (install 'qrcode pillow' to enable). Using placeholder."
-}
-
-# Check required assets
-Step "Checking installer assets"
-$requiredAssets = @(
-    "installer\assets\icon.ico",
-    "installer\assets\side-panel.bmp"
-)
-foreach ($a in $requiredAssets) {
-    if (-not (Test-Path $a)) {
-        Warn "Missing asset: $a -- installer will use Inno Setup defaults"
-    } else {
-        OK $a
-    }
-}
-
-# ---- 5. Create output directory ----
+# ---- 5. Prepare output directory ----
 
 if (-not (Test-Path "dist-installer")) {
     New-Item -ItemType Directory "dist-installer" | Out-Null
@@ -124,13 +104,15 @@ if (-not (Test-Path "dist-installer")) {
 # ---- 6. Run Inno Setup ----
 
 Step "Running Inno Setup compiler"
-& $iscc "installer\phr-setup.iss" /DMyAppVersion="$Version"
-if ($LASTEXITCODE -ne 0) { Fail "ISCC failed" }
+& $iscc "installer\phr-setup.iss" "/DMyAppVersion=$Version"
+if ($LASTEXITCODE -ne 0) { Fail "ISCC compilation failed" }
 
-$output = Get-ChildItem "dist-installer" -Filter "PHR-Setup-*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+$output = Get-ChildItem "dist-installer" -Filter "PHR-Setup-*.exe" |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if ($output) {
-    OK "Installer created: $($output.FullName)"
-    Write-Host "`nDone. Output: $($output.FullName)" -ForegroundColor Green
+    $sizeMB = [math]::Round($output.Length / 1MB, 1)
+    OK "Installer: $($output.FullName) ($sizeMB MB)"
+    Write-Host "`nDone." -ForegroundColor Green
 } else {
     Fail "Installer .exe not found in dist-installer\"
 }

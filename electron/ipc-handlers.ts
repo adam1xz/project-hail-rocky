@@ -12,13 +12,10 @@ let backendPort: number | null = null;
 
 export function registerIpcHandlers(spawnBackend: () => Promise<void>): void {
 
-  // --- App close (from launcher X button) ---
   ipcMain.on('close-app', () => app.quit());
 
-  // --- QR data query ---
   ipcMain.handle('get-qr-data', () => getCurrentQrData());
 
-  // --- Click-through toggle ---
   ipcMain.on('set-interactive', (_e, interactive: boolean) => {
     const win = getCharacterWindow();
     if (!win) return;
@@ -26,13 +23,11 @@ export function registerIpcHandlers(spawnBackend: () => Promise<void>): void {
     if (interactive) win.focus();
   });
 
-  // --- Rocky position persistence ---
   ipcMain.on('save-rocky-position', (_e, { x, y }: { x: number; y: number }) => {
     store.set('rockyOffsetX' as any, x);
     store.set('rockyOffsetY' as any, y);
   });
 
-  // --- Settings CRUD ---
   ipcMain.handle('get-settings', () => store.store);
 
   ipcMain.handle('save-settings', (_e, settings: Partial<typeof store.store>) => {
@@ -80,7 +75,6 @@ export function registerIpcHandlers(spawnBackend: () => Promise<void>): void {
       win?.webContents.send('set-speech-bubbles', settings.speechBubbles);
     }
 
-    // Forward all backend-relevant settings changes in one POST
     if (backendPort) {
       const backendPatch: Record<string, any> = {};
       if (settings.debug?.logConversation !== undefined)
@@ -125,7 +119,6 @@ export function registerIpcHandlers(spawnBackend: () => Promise<void>): void {
     return { ok: true };
   });
 
-  // --- Skins ---
   ipcMain.handle('get-skins', () => {
     try {
       const p = path.join(process.env.DEV === 'true'
@@ -212,7 +205,6 @@ export function registerIpcHandlers(spawnBackend: () => Promise<void>): void {
     return { ok: false };
   });
 
-  // --- Animations ---
   const BUILTIN_ANIMS = [
     'freeze', 'sleep', 'dance', 'crouch', 'sad', 'default',
     'jump', 'nod', 'shake', 'stomp', 'point', 'stretch',
@@ -251,7 +243,6 @@ export function registerIpcHandlers(spawnBackend: () => Promise<void>): void {
     return { ok: true };
   });
 
-  // --- Ollama models ---
   ipcMain.handle('get-ollama-models', async () => {
     try {
       const endpoint = store.get('ollama.endpoint' as any, 'http://localhost:11434');
@@ -262,7 +253,6 @@ export function registerIpcHandlers(spawnBackend: () => Promise<void>): void {
     } catch { return []; }
   });
 
-  // --- Audio devices (query directly via Python, no backend server needed) ---
   ipcMain.handle('get-audio-devices', async () => {
     try {
       const { execFileSync } = require('child_process');
@@ -280,7 +270,6 @@ export function registerIpcHandlers(spawnBackend: () => Promise<void>): void {
         outputs: devs.filter(d => d.o > 0).map(d => d.name),
       };
     } catch {
-      // Fallback: try the live backend if it's up
       if (backendPort) {
         try {
           const res = await fetch(`http://localhost:${backendPort}/devices`);
@@ -291,7 +280,6 @@ export function registerIpcHandlers(spawnBackend: () => Promise<void>): void {
     }
   });
 
-  // --- Displays ---
   ipcMain.handle('get-displays', () => {
     const primary = screen.getPrimaryDisplay();
     return screen.getAllDisplays().map((d, i) => ({
@@ -303,25 +291,20 @@ export function registerIpcHandlers(spawnBackend: () => Promise<void>): void {
     }));
   });
 
-  // --- Trigger emote from settings window ---
   ipcMain.on('trigger-emote-from-settings', (_e, name: string) => {
     getCharacterWindow()?.webContents.send('trigger-emote', name);
   });
 
-  // --- Open settings ---
   ipcMain.on('open-settings', (_e, tab?: string) => openSettings(tab));
 
-  // --- Restart backend ---
   ipcMain.on('restart-backend', () => spawnBackend());
 
-  // --- Activity ping (drag / interaction counts against sleep timer) ---
   ipcMain.on('ping-activity', () => {
     if (backendPort) {
       fetch(`http://localhost:${backendPort}/activity/ping`, { method: 'POST' }).catch(() => {});
     }
   });
 
-  // --- Open external link ---
   ipcMain.on('open-external', (_e, url: string) => shell.openExternal(url));
 }
 

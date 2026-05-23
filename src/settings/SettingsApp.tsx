@@ -1,7 +1,5 @@
 import React, { useEffect, useLayoutEffect, useState, useCallback } from 'react';
 
-// Themes
-
 const THEME_VARS: Record<string, Record<string, string>> = {
   night: {
     '--bg-a':         '#111113',
@@ -55,8 +53,6 @@ function applyTheme(name: string) {
   const root = document.documentElement;
   Object.entries(vars).forEach(([k, v]) => root.style.setProperty(k, v));
 }
-
-// i18n
 
 type LangCode = 'en' | 'pl' | 'es' | 'de';
 
@@ -368,8 +364,6 @@ const LANG_LABELS: Record<LangCode, string> = {
   en: 'English', pl: 'Polski', es: 'Español', de: 'Deutsch',
 };
 
-// Default Settings
-
 const DEFAULT_SETTINGS = {
   theme: 'night', skin: 'rocky', skinOpacity: 1.0, scale: 1.0,
   corner: 'bottom-right', displayIndex: 0, windowWidth: 750, windowHeight: 860,
@@ -391,8 +385,6 @@ const BUILTIN_ANIM_NAMES = new Set([
   'panic', 'clap', 'confused', 'chirp', 'harmonic',
 ]);
 
-// Tab Config
-
 const TAB_IDS = ['general', 'appearance', 'animations', 'skins', 'ai', 'credits'] as const;
 type TabId = typeof TAB_IDS[number];
 const TAB_KEYS: Record<TabId, string> = {
@@ -402,8 +394,6 @@ const TAB_KEYS: Record<TabId, string> = {
 const CORNER_KEYS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const;
 
 const CONTEXT_STEPS = [4, 12, 30, 60, 128, 256, 512, 1048];
-
-// Icons
 
 function HamburgerIcon() {
   return (
@@ -459,8 +449,6 @@ function TabIcon({ id }: { id: TabId }) {
     </svg>
   );
 }
-
-// UI Primitives
 
 function Tooltip({ text }: { text: string }) {
   const [show, setShow] = useState(false);
@@ -788,8 +776,6 @@ function SegmentedControl({ value, onChange, options }: {
   );
 }
 
-// Root Component
-
 export default function SettingsApp() {
   const [tab, setTab]               = useState<TabId>('general');
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -1043,8 +1029,6 @@ export default function SettingsApp() {
   );
 }
 
-// Tab: General
-
 function GeneralTab({ draft, set, t, lang, onResetAll }: {
   draft: any; set: (k: string, v: any) => void;
   t: (k: string) => string; lang: string; onResetAll: () => void;
@@ -1136,8 +1120,6 @@ function GeneralTab({ draft, set, t, lang, onResetAll }: {
   );
 }
 
-// Tab: Appearance
-
 function AppearanceTab({ draft, set, t, displays, isDev }: {
   draft: any; set: (k: string, v: any) => void;
   t: (k: string) => string;
@@ -1214,8 +1196,6 @@ function AppearanceTab({ draft, set, t, displays, isDev }: {
     </Section>
   );
 }
-
-// Tab: Animations
 
 function AnimationsTab({ draft, set, t, animations, isDev, importName, setImportName, importScript, setImportScript, onAnimationAdded, onDeleteAnimation }: {
   draft: any; set: (k: string, v: any) => void; t: (k: string) => string;
@@ -1349,8 +1329,6 @@ function AnimationsTab({ draft, set, t, animations, isDev, importName, setImport
     </>
   );
 }
-
-// Tab: Skins
 
 function SkinsTab({ draft, set, t, isDev, skins, importName, setImportName, importFile, setImportFile,
   importStatus, setImportStatus, importing, setImporting }: {
@@ -1502,8 +1480,6 @@ function SkinsTab({ draft, set, t, isDev, skins, importName, setImportName, impo
   );
 }
 
-// AI Status Panel
-
 type DiagnoseResult = {
   ollama_running: boolean; model_found: boolean;
   configured_model?: string; available_models?: string[];
@@ -1624,8 +1600,6 @@ function AiStatusPanel({ t }: { t: (k: string) => string }) {
     </div>
   );
 }
-
-// Tab: AI
 
 function AiTab({ draft, set, t, isDev, ollamaModels, audioDevices, refreshModels, onClearHistory }: {
   draft: any; set: (k: string, v: any) => void; t: (k: string) => string;
@@ -1825,8 +1799,6 @@ function AiTab({ draft, set, t, isDev, ollamaModels, audioDevices, refreshModels
   );
 }
 
-// Tab: Credits
-
 function GitHubIcon() {
   return (
     <svg width="42" height="42" viewBox="0 0 24 24" fill="currentColor">
@@ -1866,7 +1838,6 @@ function CreditsTab({ t }: { t: (k: string) => string; isDev: boolean; draft: an
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
 
-      {/* Adam */}
       <div style={card}>
         <p style={tag}>Development</p>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
@@ -1878,13 +1849,12 @@ function CreditsTab({ t }: { t: (k: string) => string; isDev: boolean; draft: an
           </button>
         </div>
         <p style={{ fontSize: 11.5, color: 'var(--text-2)', lineHeight: 1.55, margin: 0 }}>
-          Built everything except the model.
+          Project idea creator, user interface, animations, IK, project maintainer.
         </p>
       </div>
 
-      {/* Mikolaj */}
       <div style={card}>
-        <p style={tag}>Model Developer</p>
+        <p style={tag}>Model Trainer</p>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
           <span style={{ fontFamily: "'CindieMono', monospace", fontSize: 13, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-1)' }}>
             MIKOLAJ
@@ -1901,26 +1871,25 @@ function CreditsTab({ t }: { t: (k: string) => string; isDev: boolean; draft: an
           W3JA@#!DKF%A^EDWOA*J$DOW@ADJ_WDA!%^WADJ@#IKFAEW$DOAJ%DOWAJDWAD!AI#@
         </p> */}
         <p style={{ fontSize: 11.5, color: 'var(--text-2)', lineHeight: 1.55, margin: 0 }}>
-          Trained Rocky v8.
+          Trained Qwen to act like Rocky.
         </p>
       </div>
 
-      {/* Andy Weir */}
       <div style={card}>
-        <p style={tag}>Source Material</p>
-        <p style={{ fontFamily: "'CindieMono', monospace", fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--text-1)', marginBottom: 6 }}>
+        <p style={{...tag, fontSize: 8}}>Source Material</p>
+        <p style={{ fontFamily: "'CindieMono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--text-1)', marginBottom: 6 }}>
           Project Hail Mary
         </p>
         <p style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 2 }}>Andy Weir, 2021</p>
         <p style={{ fontSize: 11.5, color: 'var(--text-2)', lineHeight: 1.55, margin: 0 }}>
-          Rocky's character and lore come from the book. Go read it. Fan project, not affiliated.
+          Rocky’s character and lore come from the book, well, also the movie. Go read it, then go watch it. Fan project, not affiliated.
         </p>
       </div>
 
       {/* Libraries */}
       <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
         {([
-          ['Model',      'Ollama'],
+          ['Model',      'Qwen 3.5 (via Ollama)'],
           ['STT',        'faster-whisper / Moonshine'],
           ['TTS',        'pocket-tts'],
           ['Framework',  'Electron · React 19 · Vite'],

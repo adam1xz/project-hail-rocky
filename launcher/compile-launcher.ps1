@@ -1,39 +1,55 @@
 $ErrorActionPreference = "Stop"
 $ScriptDir = $PSScriptRoot
+$csc = $null
 
-# Find AHK v2 compiler
-$ahkPaths = @(
-    "C:\Program Files\AutoHotkey\v2\Ahk2Exe.exe",
-    "C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe",
-    "C:\Program Files (x86)\AutoHotkey\Compiler\Ahk2Exe.exe",
-    (Get-Command Ahk2Exe.exe -ErrorAction SilentlyContinue)?.Source
-)
-
-$ahkExe = $null
-foreach ($p in $ahkPaths) {
-    if ($p -and (Test-Path $p)) { $ahkExe = $p; break }
+foreach ($p in @(
+    "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe",
+    "C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe"
+)) {
+    if (Test-Path $p) { $csc = $p; break }
 }
-
-if (-not $ahkExe) {
-    Write-Error "AutoHotkey v2 compiler (Ahk2Exe.exe) not found.`nInstall AutoHotkey v2 from https://autohotkey.com"
+if (-not $csc) {
+    $found = Get-ChildItem "C:\Windows\Microsoft.NET\Framework64" -Filter "csc.exe" -Recurse -ErrorAction SilentlyContinue |
+             Sort-Object FullName -Descending | Select-Object -First 1
+    if ($found) { $csc = $found.FullName }
+}
+if (-not $csc) {
+    Write-Error "csc.exe not found. .NET Framework 4.x is required (included with Windows 10/11)."
     exit 1
 }
 
-$src  = Join-Path $ScriptDir "PHR-launcher.ahk"
+$src  = Join-Path $ScriptDir "PHR-launcher.cs"
 $out  = Join-Path $ScriptDir "PHR.exe"
 $icon = Join-Path $ScriptDir "..\installer\assets\icon.ico"
 
-$args = @("/in", $src, "/out", $out)
+Write-Host "Compiler: $csc"
+Write-Host "Source:   $src"
+Write-Host "Output:   $out"
+
+$cscArgs = @(
+    "/nologo",
+    "/target:winexe",
+    "/optimize+",
+    "/out:$out",
+    "/reference:System.Windows.Forms.dll",
+    "/reference:System.Drawing.dll",
+    "/reference:System.Net.Http.dll",
+    $src
+)
 if (Test-Path $icon) {
-    $args += @("/icon", $icon)
+    $cscArgs += "/win32icon:$icon"
 }
 
-Write-Host "Compiling: $src"
-Write-Host "Output:    $out"
-& $ahkExe @args
+& $csc @cscArgs
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "Ahk2Exe failed with exit code $LASTEXITCODE"
+    Write-Error "csc compilation failed (exit $LASTEXITCODE)"
     exit 1
 }
 
-Write-Host "Done: $out ($([math]::Round((Get-Item $out).Length / 1KB)) KB)"
+if (-not (Test-Path $out)) {
+    Write-Error "csc exited 0 but $out was not created"
+    exit 1
+}
+
+$kb = [math]::Round((Get-Item $out).Length / 1KB)
+Write-Host "Done: $out ($kb KB)"

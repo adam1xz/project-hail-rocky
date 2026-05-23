@@ -11,7 +11,8 @@
     "compile:electron": "tsc -p tsconfig.electron.json",
     "preview": "vite preview",
     "lint": "tsc --noEmit",
-    "generate-icons": "node scripts/generate-icons.js"
+    "generate-icons": "node scripts/generate-icons.js",
+    "generate-installer-assets": "node installer/generate-installer-assets.js"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

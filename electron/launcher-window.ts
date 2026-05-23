@@ -16,6 +16,7 @@ export function createLauncherWindow(preloadPath: string): BrowserWindow {
     resizable: false,
     skipTaskbar: true,
     alwaysOnTop: true,
+    show: false,
     backgroundColor: '#111113',
     webPreferences: {
       preload: preloadPath,
@@ -23,6 +24,8 @@ export function createLauncherWindow(preloadPath: string): BrowserWindow {
       nodeIntegration: false,
     },
   });
+
+  win.once('ready-to-show', () => win?.show());
 
   if (process.env.DEV === 'true') {
     win.loadURL('http://localhost:3000/launcher.html');

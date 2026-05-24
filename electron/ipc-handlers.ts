@@ -97,6 +97,8 @@ export function registerIpcHandlers(spawnBackend: () => Promise<void>): void {
         backendPatch.system_prompt_suffix = settings.systemPromptSuffix;
       if (settings.tts?.volume !== undefined)
         backendPatch.tts_volume = settings.tts.volume;
+      if (settings.stt?.mode !== undefined)
+        backendPatch.stt_mode = settings.stt.mode;
       if (Object.keys(backendPatch).length > 0) {
         fetch(`http://localhost:${backendPort}/settings`, {
           method: 'POST',

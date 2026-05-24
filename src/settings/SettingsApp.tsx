@@ -103,13 +103,15 @@ const TR: Record<LangCode, Record<string, string>> = {
     btn_refresh: 'Refresh',
     tip_endpoint: 'URL of your running Ollama instance. Default: http://localhost:11434',
     tip_model: 'Ollama model to use for Rocky\'s responses. Must be pulled first.',
-    lbl_stt_model: 'STT model', lbl_microphone: 'Microphone',
+    lbl_stt_mode: 'STT mode', lbl_stt_model: 'STT model', lbl_microphone: 'Microphone',
     lbl_stt_language: 'Recognition language', lbl_speaker: 'Speaker',
+    tip_stt_mode: 'How speech input is transcribed. Auto uses model-native audio if available, otherwise falls back to Whisper. Model STT sends audio directly to the LLM. External STT always uses the local Whisper/Moonshine pipeline.',
     tip_stt_model: 'Moonshine is fast but English-only. Whisper is slower but handles multiple languages.',
     tip_microphone: 'Audio input device used for voice recognition.',
     tip_stt_language: 'Language to recognize. Auto detects automatically. Only applies to the Accurate (Whisper) model.',
     tip_speaker: 'Audio output device used for Rocky\'s voice.',
     stt_fast: 'Fast (Moonshine, English only)', stt_accurate: 'Accurate (Whisper, multilingual)',
+    stt_mode_auto: 'Auto (detect from model)', stt_mode_model: 'Model STT', stt_mode_external: 'External STT (Whisper)',
     btn_save: 'Save', saving: 'Saving...', saved: 'Saved!', loading: 'Loading...',
     opt_default: 'Default',
     btn_reset_all: 'Reset all settings to defaults',
@@ -200,13 +202,15 @@ const TR: Record<LangCode, Record<string, string>> = {
     btn_refresh: 'Odśwież',
     tip_endpoint: 'Adres działającej instancji Ollama. Domyślnie: http://localhost:11434',
     tip_model: 'Model Ollama używany przez Rocky\'ego. Musi być wcześniej pobrany.',
-    lbl_stt_model: 'Model STT', lbl_microphone: 'Mikrofon',
+    lbl_stt_mode: 'Tryb STT', lbl_stt_model: 'Model STT', lbl_microphone: 'Mikrofon',
     lbl_stt_language: 'Język rozpoznawania', lbl_speaker: 'Głośniki',
+    tip_stt_mode: 'Sposób transkrypcji mowy. Auto używa audio modelu jeśli dostępne, w przeciwnym razie Whisper. Model STT wysyła audio bezpośrednio do LLM. Zewnętrzny STT zawsze używa lokalnego Whisper/Moonshine.',
     tip_stt_model: 'Moonshine jest szybki (tylko angielski). Whisper obsługuje wiele języków.',
     tip_microphone: 'Urządzenie wejściowe audio do rozpoznawania mowy.',
     tip_stt_language: 'Język do rozpoznawania mowy. Auto wykrywa automatycznie. Dotyczy tylko modelu Whisper.',
     tip_speaker: 'Urządzenie wyjściowe audio dla głosu Rocky\'ego.',
     stt_fast: 'Szybki (Moonshine, tylko angielski)', stt_accurate: 'Dokładny (Whisper, wielojęzyczny)',
+    stt_mode_auto: 'Auto (wykryj z modelu)', stt_mode_model: 'STT modelu', stt_mode_external: 'Zewnętrzny STT (Whisper)',
     btn_save: 'Zapisz', saving: 'Zapisywanie...', saved: 'Zapisano!', loading: 'Ładowanie...',
     opt_default: 'Domyślny',
     btn_reset_all: 'Przywróć wszystkie ustawienia do domyślnych',
@@ -268,13 +272,15 @@ const TR: Record<LangCode, Record<string, string>> = {
     btn_refresh: 'Actualizar',
     tip_endpoint: 'URL de la instancia de Ollama. Por defecto: http://localhost:11434',
     tip_model: 'Modelo de Ollama para Rocky. Debe estar descargado previamente.',
-    lbl_stt_model: 'Modelo STT', lbl_microphone: 'Micrófono',
+    lbl_stt_mode: 'Modo STT', lbl_stt_model: 'Modelo STT', lbl_microphone: 'Micrófono',
     lbl_stt_language: 'Idioma de reconocimiento', lbl_speaker: 'Altavoces',
+    tip_stt_mode: 'Cómo se transcribe el audio. Auto usa audio nativo del modelo si está disponible. STT de modelo envía audio al LLM. STT externo usa Whisper/Moonshine local.',
     tip_stt_model: 'Moonshine es rápido (solo inglés). Whisper soporta múltiples idiomas.',
     tip_microphone: 'Dispositivo de entrada de audio para el reconocimiento de voz.',
     tip_stt_language: 'Idioma a reconocer. Auto detecta automáticamente. Solo aplica al modelo Whisper.',
     tip_speaker: 'Dispositivo de salida de audio para la voz de Rocky.',
     stt_fast: 'Rápido (Moonshine, solo inglés)', stt_accurate: 'Preciso (Whisper, multilingüe)',
+    stt_mode_auto: 'Auto (detectar del modelo)', stt_mode_model: 'STT del modelo', stt_mode_external: 'STT externo (Whisper)',
     btn_save: 'Guardar', saving: 'Guardando...', saved: '¡Guardado!', loading: 'Cargando...',
     opt_default: 'Predeterminado',
     btn_reset_all: 'Restablecer toda la configuración',
@@ -336,13 +342,15 @@ const TR: Record<LangCode, Record<string, string>> = {
     btn_refresh: 'Aktualisieren',
     tip_endpoint: 'URL der laufenden Ollama-Instanz. Standard: http://localhost:11434',
     tip_model: 'Ollama-Modell für Rockys Antworten. Muss vorher geladen werden.',
-    lbl_stt_model: 'STT-Modell', lbl_microphone: 'Mikrofon',
+    lbl_stt_mode: 'STT-Modus', lbl_stt_model: 'STT-Modell', lbl_microphone: 'Mikrofon',
     lbl_stt_language: 'Erkennungssprache', lbl_speaker: 'Lautsprecher',
+    tip_stt_mode: 'Wie Spracheingabe transkribiert wird. Auto nutzt natives Modell-Audio wenn verfügbar. Modell-STT sendet Audio direkt ans LLM. Externer STT nutzt immer lokales Whisper/Moonshine.',
     tip_stt_model: 'Moonshine ist schnell (nur Englisch). Whisper unterstützt mehrere Sprachen.',
     tip_microphone: 'Audioeingang für die Spracherkennung.',
     tip_stt_language: 'Sprache zur Erkennung. Auto erkennt automatisch. Gilt nur für das Whisper-Modell.',
     tip_speaker: 'Audioausgang für Rockys Stimme.',
     stt_fast: 'Schnell (Moonshine, nur Englisch)', stt_accurate: 'Genau (Whisper, mehrsprachig)',
+    stt_mode_auto: 'Auto (vom Modell erkennen)', stt_mode_model: 'Modell-STT', stt_mode_external: 'Externer STT (Whisper)',
     btn_save: 'Speichern', saving: 'Speichern...', saved: 'Gespeichert!', loading: 'Laden...',
     opt_default: 'Standard',
     btn_reset_all: 'Alle Einstellungen zurücksetzen',
@@ -372,7 +380,7 @@ const DEFAULT_SETTINGS = {
   disabledAnimations: [] as string[], fontSize: 14, language: 'en', autoStart: false,
   developerMode: false, activityMode: 'active', systemPromptSuffix: '',
   ollama: { endpoint: 'http://localhost:11434', model: 'Rockyv8:latest' },
-  stt: { model: 'better', device: 'default', language: 'auto' },
+  stt: { model: 'better', device: 'default', language: 'auto', mode: 'auto' },
   tts: { device: 'default', volume: 1.0 },
   debug: { showBorder: false, logConversation: false },
   contextSize: 12,
@@ -892,7 +900,6 @@ export default function SettingsApp() {
       fontSize: 13, background: 'var(--bg-a)', color: 'var(--text-1)',
     }}>
 
-      {/* Sidebar - always absolute so it overlays content when expanded */}
       <div
         onClick={e => e.stopPropagation()}
         style={{
@@ -904,7 +911,6 @@ export default function SettingsApp() {
           transition: 'width 0.22s ease',
           overflow: 'hidden',
         }}>
-        {/* Hamburger toggle */}
         <button
           onClick={() => setSidebarOpen(o => !o)}
           style={{
@@ -921,7 +927,6 @@ export default function SettingsApp() {
           <HamburgerIcon />
         </button>
 
-        {/* Tab buttons */}
         <div style={{ display: 'flex', flexDirection: 'column', paddingTop: 6, gap: 2 }}>
           {TAB_IDS.map(id => {
             const active = tab === id;
@@ -956,7 +961,6 @@ export default function SettingsApp() {
         </div>
       </div>
 
-      {/* Content - always full-width, offset by the collapsed 52px sidebar */}
       <div
         style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', paddingLeft: 52 }}
         onClick={() => { if (sidebarOpen) setSidebarOpen(false); }}
@@ -1485,6 +1489,7 @@ type DiagnoseResult = {
   configured_model?: string; available_models?: string[];
   ollama_error?: string;
   stt_loaded: boolean; tts_loaded: boolean; stt_active: boolean;
+  audio_capable?: boolean; stt_mode?: string;
   error?: string;
 };
 
@@ -1546,6 +1551,14 @@ function AiStatusPanel({ t }: { t: (k: string) => string }) {
         {!result.model_found && result.available_models && result.available_models.length > 0 && (
           <div style={{ fontSize: 11, color: 'var(--text-3)', paddingLeft: 14 }}>
             Available: {result.available_models.slice(0, 5).join(', ')}
+          </div>
+        )}
+        {result.ollama_running && result.model_found && result.audio_capable !== undefined && (
+          <div style={{ display: 'flex', alignItems: 'center', fontSize: 12, color: 'var(--text-2)', marginTop: 4 }}>
+            <StatusDot ok={result.audio_capable} warn={!result.audio_capable} />
+            {result.audio_capable
+              ? `Audio STT · mode: ${result.stt_mode ?? 'auto'}`
+              : `No audio STT · mode: ${result.stt_mode ?? 'auto'}`}
           </div>
         )}
       </div>
@@ -1726,6 +1739,19 @@ function AiTab({ draft, set, t, isDev, ollamaModels, audioDevices, refreshModels
 
       <Section title={t('section_audio')}>
         {isDev && (
+          <Row label={t('lbl_stt_mode')} tip={t('tip_stt_mode')}>
+            <StyledSelect
+              value={draft.stt?.mode ?? 'auto'}
+              options={[
+                { value: 'auto',     label: t('stt_mode_auto') },
+                { value: 'model',    label: t('stt_mode_model') },
+                { value: 'external', label: t('stt_mode_external') },
+              ]}
+              onChange={v => set('stt.mode', v)}
+            />
+          </Row>
+        )}
+        {isDev && (
           <Row label={t('lbl_stt_model')} tip={t('tip_stt_model')}>
             <StyledSelect
               value={draft.stt?.model ?? 'faster'}
@@ -1863,13 +1889,6 @@ function CreditsTab({ t }: { t: (k: string) => string; isDev: boolean; draft: an
             <OllamaIcon />
           </button>
         </div>
-        {/* <p style={{
-          fontFamily: "'CindieMono', monospace", fontSize: 8, opacity: 0.5,
-          color: 'var(--text-3)', letterSpacing: '0.05em',
-          lineHeight: 1.6, marginBottom: 7,
-        }}>
-          W3JA@#!DKF%A^EDWOA*J$DOW@ADJ_WDA!%^WADJ@#IKFAEW$DOAJ%DOWAJDWAD!AI#@
-        </p> */}
         <p style={{ fontSize: 11.5, color: 'var(--text-2)', lineHeight: 1.55, margin: 0 }}>
           Trained Qwen to act like Rocky.
         </p>
@@ -1886,7 +1905,6 @@ function CreditsTab({ t }: { t: (k: string) => string; isDev: boolean; draft: an
         </p>
       </div>
 
-      {/* Libraries */}
       <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
         {([
           ['Model',      'Qwen 3.5 (via Ollama)'],

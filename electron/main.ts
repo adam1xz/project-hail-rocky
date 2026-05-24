@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { spawn, ChildProcess } from 'child_process';
 import { createCharacterWindow, getCharacterWindow } from './character-window';
-import { createSettingsWindow } from './settings-window';
+import { createSettingsWindow, getSettingsWindow } from './settings-window';
 import { createTray, setMobileMode } from './tray';
 import { registerIpcHandlers, setPythonProcess, setBackendPort, getBackendPort } from './ipc-handlers';
 import { createLauncherWindow, closeLauncher } from './launcher-window';
@@ -33,6 +33,34 @@ function getLanIp(): string {
   return '127.0.0.1';
 }
 
+async function autoSelectModel(port: number): Promise<void> {
+  try {
+    const endpoint: string = (store.get as any)('ollama.endpoint', 'http://localhost:11434');
+    const res = await fetch(`${endpoint}/api/tags`, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return;
+    const data: any = await res.json();
+    const available: string[] = (data.models || []).map((m: any) => String(m.name));
+
+    const v11 = available.find(m => /rockyv11|rocky[_-]?v11/i.test(m));
+    const v8  = available.find(m => /rockyv8|rocky[_-]?v8/i.test(m));
+
+    const currentModel: string = (store.get as any)('ollama.model', 'Rockyv8:latest');
+    if (!/rocky/i.test(currentModel)) return;
+
+    const target = v11 ?? v8 ?? null;
+    if (target && target !== currentModel) {
+      (store.set as any)('ollama.model', target);
+      await fetch(`http://localhost:${port}/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ollama_model: target }),
+      }).catch(() => {});
+      getCharacterWindow()?.webContents.send('settings-loaded', store.store);
+      getSettingsWindow()?.webContents.send('settings-loaded', store.store);
+    }
+  } catch { /* Ollama may not be running */ }
+}
+
 async function spawnBackend(): Promise<void> {
   if (pythonProc) {
     pythonProc.kill();
@@ -58,6 +86,7 @@ async function spawnBackend(): Promise<void> {
     '--stt-model', s.stt.model,
     '--stt-device', s.stt.device,
     '--stt-language', s.stt.language ?? 'auto',
+    '--stt-mode', s.stt.mode ?? 'auto',
     '--tts-device', s.tts.device,
     '--lan',  // always bind to 0.0.0.0 for mobile mode readiness
   ];
@@ -76,6 +105,7 @@ async function spawnBackend(): Promise<void> {
           const port = parseInt(line.split(':')[1].trim(), 10);
           setBackendPort(port);
           startEventStream(port);
+          setTimeout(() => autoSelectModel(port).catch(() => {}), 2000);
 
           if (currentMode === 'mobile') {
             const host = getLanIp();

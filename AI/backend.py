@@ -15,6 +15,7 @@ from typing import Optional
 import re
 import tempfile
 import os
+from collections import deque
 import numpy as np
 import sounddevice as sd
 import soundfile as sf
@@ -47,6 +48,7 @@ parser.add_argument("--ollama-model",    default="Rockyv8:latest")
 parser.add_argument("--stt-model",       choices=["faster", "better"], default="better")
 parser.add_argument("--stt-device",      default="default")
 parser.add_argument("--stt-language",    default="auto")
+parser.add_argument("--stt-mode",        choices=["auto", "model", "external"], default="auto")
 parser.add_argument("--tts-device",      default="default")
 parser.add_argument("--lan",             action="store_true", help="Bind to 0.0.0.0 for LAN access")
 args = parser.parse_args()
@@ -62,13 +64,15 @@ ws_queues: list = []
 async def lifespan(app: FastAPI):
     global _loop
     _loop = asyncio.get_event_loop()
-    threading.Thread(target=speak_worker, daemon=True).start()
     threading.Thread(target=load_tts, daemon=True).start()
     threading.Thread(target=load_stt, daemon=True).start()
     threading.Thread(target=bored_loop, daemon=True).start()
+    threading.Thread(target=speak_worker, daemon=True).start()
     await asyncio.get_event_loop().run_in_executor(
         None, lambda: _models_ready.wait(timeout=45)
     )
+    global _model_audio_capable
+    _model_audio_capable = check_model_audio_capability()
     start_stt()
     yield
 
@@ -107,7 +111,11 @@ _system_prompt_suffix = ""
 _bored                = False
 _last_activity        = 0.0
 mobile_connected      = False
-BORED_TIMEOUT  = 120.0
+BORED_TIMEOUT         = 120.0
+_HAS_TTS_STREAM       = False
+_audio_lock           = threading.Lock()
+_current_player       = None
+_model_audio_capable  = False
 
 VALID_ANIMS = {
     "freeze", "sleep", "dance", "crouch", "sad", "default",
@@ -294,21 +302,285 @@ def log_conversation(user: str, raw_reply: str, spoken: str, emote: Optional[str
     _write_log(f'conversation_{date}.log', '\n'.join(lines) + '\n')
 
 def load_tts():
-    global tts_model, tts_voice
+    global tts_model, tts_voice, _HAS_TTS_STREAM
     try:
         from pocket_tts import TTSModel
         print("Loading TTS...", flush=True)
         tts_model = TTSModel.load_model()
+
+        _HAS_TTS_STREAM = hasattr(tts_model, 'generate_audio_stream')
+        if _HAS_TTS_STREAM:
+            backend_log("[TTS] Native streaming generation available")
+        else:
+            backend_log("[TTS] Streaming NOT available - will use chunked fallback")
+
         ref = Path(args.voice_ref)
-        if ref.exists():
+        safetensors_path = ref.with_suffix(".safetensors")
+
+        if safetensors_path.exists():
+            print(f"[TTS] Loading cached voice state from {safetensors_path}...", flush=True)
+            loaded = False
+            try:
+                from pocket_tts import import_model_state
+                tts_voice = import_model_state(str(safetensors_path))
+                backend_log("[TTS] Voice state loaded from safetensors cache")
+                loaded = True
+            except ImportError:
+                pass
+            except Exception as e:
+                backend_log(f"[TTS] import_model_state failed: {e}")
+
+            if not loaded:
+                try:
+                    import torch
+                    tts_voice = torch.load(str(safetensors_path), weights_only=False)
+                    backend_log("[TTS] Voice state loaded from torch cache")
+                    loaded = True
+                except Exception as e:
+                    backend_log(f"[TTS] torch.load failed: {e} - deleting bad cache, recomputing from WAV")
+                    try:
+                        safetensors_path.unlink()
+                    except Exception:
+                        pass
+
+        if not tts_voice and ref.exists():
+            print(f"[TTS] Computing voice state from {ref}...", flush=True)
             tts_voice = tts_model.get_state_for_audio_prompt(str(ref))
+            try:
+                from pocket_tts import export_model_state
+                export_model_state(tts_voice, str(safetensors_path))
+                backend_log(f"[TTS] Voice state cached to {safetensors_path}")
+            except (ImportError, Exception) as cache_err:
+                try:
+                    import torch
+                    torch.save(tts_voice, str(safetensors_path))
+                    backend_log(f"[TTS] Voice state cached (torch format) to {safetensors_path}")
+                except Exception as e2:
+                    backend_log(f"[TTS] Could not cache voice state: {e2}")
+
+        if tts_voice:
             _ = tts_model.generate_audio(model_state=tts_voice, text_to_generate=".")
+            backend_log("[TTS] Voice warmup complete")
+        else:
+            backend_log("[TTS] WARNING: tts_voice is None - TTS will be silent")
+
         print("TTS ready.", flush=True)
     except Exception as e:
+        backend_log(f"[TTS] Fatal error: {e}")
         print(f"TTS unavailable: {e}", flush=True)
 
+class StreamingAudioPlayer:
+    """
+    Gapless audio player using sounddevice callback + deque buffer.
+    Pre-buffers 250ms before starting playback to absorb timing jitter
+    between sentences.
+    """
+    PREBUFFER_SECONDS = 0.25
+
+    def __init__(self, sample_rate: int = 24000, device=None):
+        self.sample_rate = sample_rate
+        self.device = device
+        self._chunks: deque = deque()
+        self._current_chunk = None
+        self._current_pos = 0
+        self._lock = threading.Lock()
+        self._done = False
+        self._finished = threading.Event()
+        self._stream_started = False
+        self._total_buffered = 0
+        self._prebuffer_target = int(self.PREBUFFER_SECONDS * sample_rate)
+        self._stream = None
+
+    def feed(self, audio: np.ndarray):
+        audio = audio.astype(np.float32).ravel()
+        should_start = False
+        with self._lock:
+            self._chunks.append(audio)
+            self._total_buffered += len(audio)
+            if not self._stream_started and self._total_buffered >= self._prebuffer_target:
+                self._stream_started = True
+                should_start = True
+        if should_start:
+            self._create_and_start_stream()
+
+    def signal_end(self):
+        with self._lock:
+            self._done = True
+
+    def wait_done(self, timeout: float = 60.0):
+        with self._lock:
+            if not self._stream_started and self._total_buffered > 0:
+                self._stream_started = True
+            if not self._stream_started:
+                return
+        self._create_and_start_stream()
+        self._finished.wait(timeout=timeout)
+        self._cleanup()
+
+    def cancel(self):
+        with self._lock:
+            self._chunks.clear()
+            self._current_chunk = None
+            self._current_pos = 0
+            self._done = True
+        self._finished.set()
+        self._cleanup()
+
+    def _create_and_start_stream(self):
+        if self._stream is not None:
+            try:
+                self._stream.start()
+            except Exception:
+                pass
+            return
+
+        blocksize = int(0.05 * self.sample_rate)
+
+        def callback(outdata, frames, _time, _status):
+            with self._lock:
+                written = 0
+                while written < frames:
+                    if self._current_chunk is not None and self._current_pos < len(self._current_chunk):
+                        available = len(self._current_chunk) - self._current_pos
+                        to_read = min(available, frames - written)
+                        outdata[written:written + to_read, 0] = \
+                            self._current_chunk[self._current_pos:self._current_pos + to_read]
+                        self._current_pos += to_read
+                        written += to_read
+                    elif self._chunks:
+                        self._current_chunk = self._chunks.popleft()
+                        self._current_pos = 0
+                    else:
+                        outdata[written:, 0] = 0
+                        if self._done:
+                            self._finished.set()
+                        break
+
+        self._stream = sd.OutputStream(
+            samplerate=self.sample_rate,
+            channels=1,
+            dtype='float32',
+            callback=callback,
+            blocksize=blocksize,
+            device=self.device,
+        )
+        self._stream.start()
+
+    def _cleanup(self):
+        if self._stream:
+            try:
+                self._stream.stop()
+                self._stream.close()
+            except Exception:
+                pass
+            self._stream = None
+
+
+class SentenceAccumulator:
+    """
+    Accumulates LLM stream tokens and yields complete speakable chunks
+    as soon as a sentence boundary is detected.
+    """
+    SENTENCE_END = re.compile(r'[.!?]')
+    COMMA_SPLIT  = re.compile(r'[,;:]\s+')
+    EMOTE_TAG    = re.compile(r'\[([^\]]+)\]')
+
+    def __init__(self, max_chunk_words: int = 12):
+        self.buffer = ""
+        self.max_chunk_words = max_chunk_words
+        self.pending_emote = None
+        self._emote_checked = False
+
+    def add_token(self, token: str) -> list:
+        self.buffer += token
+        return self._extract_chunks()
+
+    def flush(self) -> list:
+        remaining = self.buffer.strip()
+        self.buffer = ""
+        if remaining:
+            clean = self.EMOTE_TAG.sub('', remaining).strip()
+            if clean:
+                return [clean]
+        return []
+
+    def _extract_chunks(self) -> list:
+        chunks = []
+
+        if not self._emote_checked:
+            m = re.match(r'^\s*\[([^\]]+)\]\s*', self.buffer)
+            if m:
+                tag = m.group(1).strip().lower().replace(' ', '_')
+                if tag in VALID_ANIMS:
+                    self.pending_emote = tag
+                self.buffer = self.buffer[m.end():]
+            if self.buffer.strip() and not re.match(r'^\s*\[', self.buffer):
+                self._emote_checked = True
+
+        while True:
+            m = self.SENTENCE_END.search(self.buffer)
+            if m:
+                raw_chunk = self.buffer[:m.end()]
+                self.buffer = self.buffer[m.end():].lstrip()
+                clean = self.EMOTE_TAG.sub('', raw_chunk).strip()
+                if clean:
+                    chunks.append(clean)
+            else:
+                break
+
+        if self.buffer:
+            clean = self.EMOTE_TAG.sub('', self.buffer).strip()
+            words = clean.split()
+            if len(words) >= self.max_chunk_words:
+                m = self.COMMA_SPLIT.search(self.buffer)
+                if m:
+                    raw_chunk = self.buffer[:m.end()]
+                    self.buffer = self.buffer[m.end():].lstrip()
+                    clean_chunk = self.EMOTE_TAG.sub('', raw_chunk).strip()
+                    if clean_chunk:
+                        chunks.append(clean_chunk)
+                else:
+                    split_at = self.max_chunk_words
+                    raw_chunk = " ".join(words[:split_at])
+                    self.buffer = " ".join(words[split_at:])
+                    if raw_chunk:
+                        chunks.append(raw_chunk)
+
+        return chunks
+
+
+def _stream_tts(text: str, audio_sink, is_first: bool = False):
+    """
+    Stream TTS audio for text into audio_sink.
+    audio_sink can be a StreamingAudioPlayer or a callable(chunk_np, is_first, is_final).
+    """
+    if not tts_model or not tts_voice:
+        return
+
+    def _feed(chunk_np: np.ndarray, final: bool = False):
+        if chunk_np.size == 0:
+            return
+        if _tts_volume != 1.0:
+            chunk_np = chunk_np * _tts_volume
+        chunk_np = chunk_np.astype(np.float32)
+        if isinstance(audio_sink, StreamingAudioPlayer):
+            audio_sink.feed(chunk_np)
+        elif callable(audio_sink):
+            audio_sink(chunk_np, is_first=is_first, is_final=final)
+
+    if _HAS_TTS_STREAM:
+        for chunk in tts_model.generate_audio_stream(
+            model_state=tts_voice, text_to_generate=text
+        ):
+            chunk_np = chunk.squeeze().cpu().numpy() if hasattr(chunk, 'cpu') else np.array(chunk).squeeze()
+            _feed(chunk_np)
+    else:
+        audio = tts_model.generate_audio(model_state=tts_voice, text_to_generate=text)
+        chunk_np = audio.squeeze().cpu().numpy() if hasattr(audio, 'cpu') else np.array(audio).squeeze()
+        _feed(chunk_np, final=True)
+
+
 def speak(text: str):
-    global _tts_volume
     if not tts_model or not tts_voice:
         print(f"[TTS] Skipped (no model): {repr(text[:40])}", flush=True)
         return
@@ -320,27 +592,26 @@ def speak(text: str):
         return
     try:
         audio = tts_model.generate_audio(model_state=tts_voice, text_to_generate=text)
-        if hasattr(audio, 'squeeze'):
-            audio_np = audio.squeeze().cpu().numpy()
-        else:
-            audio_np = np.array(audio).squeeze()
+        audio_np = audio.squeeze().cpu().numpy() if hasattr(audio, 'squeeze') else np.array(audio).squeeze()
         if _tts_volume != 1.0:
             audio_np = audio_np * _tts_volume
-        push_state("speaking")
         device = None if args.tts_device == "default" else args.tts_device
-        sd.play(audio_np, samplerate=TTS_RATE, device=device)
+        push_state("speaking")
+        sd.play(audio_np.astype(np.float32), samplerate=TTS_RATE, device=device)
         sd.wait()
         push_state("idle")
     except Exception as e:
         print(f"[TTS] Error: {e}", flush=True)
         push_state("idle")
 
+
 def speak_worker():
     while True:
         text = speak_queue.get()
         if text is None:
             break
-        speak(text)
+        with _audio_lock:
+            speak(text)
         speak_queue.task_done()
 
 import urllib.request
@@ -452,6 +723,73 @@ def query_ollama(user_text: str) -> tuple:
     backend_log(f"[LLM] All attempts failed. Using fallback: {repr(fallback)}")
     return fallback, _fallback_metrics("all attempts failed")
 
+
+def query_ollama_streaming(user_text: str):
+    """
+    Stream tokens from Ollama. Yields (token, full_reply_so_far).
+    On error, yields remaining fallback text as a single token.
+    """
+    history.append({"role": "user", "content": user_text})
+    if len(history) > _context_size:
+        del history[:-_context_size]
+
+    context_messages = history[-_context_size:]
+    full_prompt = SYSTEM_PROMPT + ("\n\n" + _system_prompt_suffix if _system_prompt_suffix else "")
+    messages = [{"role": "system", "content": full_prompt}] + context_messages
+    payload = json.dumps({
+        "model": args.ollama_model,
+        "messages": messages,
+        "stream": True,
+        "options": {"num_predict": 60},
+    }).encode()
+
+    full_reply = ""
+    start_time = time.time()
+    backend_log(f"[LLM-STREAM] >>> User: {repr(user_text)}")
+
+    try:
+        req = urllib.request.Request(
+            f"{args.ollama_endpoint}/api/chat",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            for raw_line in resp:
+                line = raw_line.decode('utf-8').strip()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                if data.get("done", False):
+                    elapsed = time.time() - start_time
+                    eval_count = data.get("eval_count", 0)
+                    eval_dur = data.get("eval_duration", 0) / 1e9
+                    tps = eval_count / eval_dur if eval_dur > 0 else 0
+                    backend_log(
+                        f"[LLM-STREAM] <<< Done ({elapsed:.2f}s | "
+                        f"{eval_count} tok @ {tps:.1f} t/s): {repr(full_reply)}"
+                    )
+                    break
+
+                token = data.get("message", {}).get("content", "")
+                if token:
+                    full_reply += token
+                    yield token, full_reply
+
+        if full_reply:
+            history.append({"role": "assistant", "content": full_reply})
+
+    except Exception as e:
+        backend_log(f"[LLM-STREAM] Error: {type(e).__name__}: {e}")
+        if not full_reply:
+            fallback = random.choice(FALLBACK_RESPONSES)
+            history.append({"role": "assistant", "content": fallback})
+            yield fallback, fallback
+
+
 # STT
 
 def load_stt():
@@ -473,16 +811,122 @@ def load_stt():
     finally:
         _models_ready.set()  # Signal even on failure so startup doesn't hang
 
+def check_model_audio_capability() -> bool:
+    """Check if the configured Ollama model reports audio capability."""
+    try:
+        payload = json.dumps({"name": args.ollama_model}).encode()
+        req = urllib.request.Request(
+            f"{args.ollama_endpoint}/api/show",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as r:
+            data = json.loads(r.read())
+            caps = data.get("capabilities", [])
+            has_audio = "audio" in caps
+            backend_log(f"[CAPS] Model={args.ollama_model} capabilities={caps} audio={has_audio}")
+            return has_audio
+    except Exception as e:
+        backend_log(f"[CAPS] Could not check capabilities: {e}")
+        return False
+
+
+def query_ollama_streaming_with_audio(audio_np: np.ndarray):
+    """Stream Ollama response for an audio user message (model-native STT)."""
+    import base64
+
+    # Save debug copy so the clip can be inspected
+    debug_wav_path = _log_dir / "debug_audio_latest.wav"
+    sf.write(str(debug_wav_path), audio_np, SAMPLE_RATE)
+    duration = len(audio_np) / SAMPLE_RATE
+    backend_log(f"[STT-MODEL] Audio clip: {duration:.2f}s, saved to {debug_wav_path}")
+
+    wav_buf = io.BytesIO()
+    sf.write(wav_buf, audio_np, SAMPLE_RATE, format="WAV")
+    audio_b64 = base64.b64encode(wav_buf.getvalue()).decode("ascii")
+    backend_log(f"[STT-MODEL] Encoded size: {len(audio_b64)} chars base64")
+
+    history.append({"role": "user", "content": "[voice message]"})
+    if len(history) > _context_size:
+        del history[:-_context_size]
+
+    context_messages = history[-_context_size:]
+    full_prompt = SYSTEM_PROMPT + ("\n\n" + _system_prompt_suffix if _system_prompt_suffix else "")
+    prior = list(context_messages[:-1])
+    audio_msg = {"role": "user", "content": "", "audio": [audio_b64]}
+    messages = [{"role": "system", "content": full_prompt}] + prior + [audio_msg]
+
+    payload = json.dumps({
+        "model": args.ollama_model,
+        "messages": messages,
+        "stream": True,
+        "options": {"num_predict": 60},
+    }).encode()
+    backend_log(f"[STT-MODEL] Payload size: {len(payload)} bytes, model={args.ollama_model}")
+
+    full_reply = ""
+    start_time = time.time()
+    first_response_logged = False
+    backend_log("[LLM-STREAM-AUDIO] Sending audio message to model")
+
+    try:
+        req = urllib.request.Request(
+            f"{args.ollama_endpoint}/api/chat",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            for raw_line in resp:
+                line = raw_line.decode('utf-8').strip()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not first_response_logged:
+                    first_response_logged = True
+                    backend_log(f"[LLM-STREAM-AUDIO] First response keys: {list(data.keys())}")
+                    if "error" in data:
+                        backend_log(f"[LLM-STREAM-AUDIO] ERROR from Ollama: {data['error']}")
+                if data.get("done", False):
+                    elapsed = time.time() - start_time
+                    eval_count = data.get("eval_count", 0)
+                    eval_dur = data.get("eval_duration", 0) / 1e9
+                    tps = eval_count / eval_dur if eval_dur > 0 else 0
+                    backend_log(f"[LLM-STREAM-AUDIO] Done ({elapsed:.2f}s | {eval_count} tok @ {tps:.1f} t/s): {repr(full_reply)}")
+                    break
+                token = data.get("message", {}).get("content", "")
+                if token:
+                    full_reply += token
+                    yield token, full_reply
+        if full_reply:
+            history.append({"role": "assistant", "content": full_reply})
+    except Exception as e:
+        backend_log(f"[LLM-STREAM-AUDIO] Error: {type(e).__name__}: {e}")
+        if not full_reply:
+            fallback = random.choice(FALLBACK_RESPONSES)
+            history.append({"role": "assistant", "content": fallback})
+            yield fallback, fallback
+
+
 def _write_wav_tmp(audio: np.ndarray, sample_rate: int) -> str:
     fd, path = tempfile.mkstemp(suffix=".wav")
     os.close(fd)
     sf.write(path, audio, sample_rate)
     return path
 
+def _normalize_audio(chunk: np.ndarray) -> np.ndarray:
+    peak = np.max(np.abs(chunk))
+    if peak > 0.01:
+        chunk = chunk * (0.9 / peak)
+    return chunk
+
 def transcribe_chunk(chunk: np.ndarray) -> str:
     global stt_model_obj
     if not stt_model_obj:
         return ""
+    chunk = _normalize_audio(chunk)
     try:
         if stt_model_obj[0] == "moonshine":
             _, model, tok = stt_model_obj
@@ -493,7 +937,7 @@ def transcribe_chunk(chunk: np.ndarray) -> str:
             lang = None if args.stt_language == "auto" else args.stt_language
             tmp = _write_wav_tmp(chunk, SAMPLE_RATE)
             try:
-                segs, _ = model.transcribe(tmp, beam_size=5, language=lang)
+                segs, _ = model.transcribe(tmp, beam_size=5, language=lang, vad_filter=True)
                 return " ".join(s.text.strip() for s in segs).strip()
             finally:
                 os.unlink(tmp)
@@ -503,10 +947,10 @@ def transcribe_chunk(chunk: np.ndarray) -> str:
         threading.Thread(target=load_stt, daemon=True).start()
         return ""
 
-SILENCE_RMS   = 0.008
-SILENCE_SECS  = 0.9
-PREROLL_SECS  = 0.4
-MIN_UTTER_SECS = 0.5
+SILENCE_RMS    = 0.018
+SILENCE_SECS   = 0.7
+PREROLL_SECS   = 0.3
+MIN_UTTER_SECS = 0.8
 
 def stt_loop():
     global stt_active
@@ -549,21 +993,31 @@ def stt_loop():
                         silence_run = silence_run + len(chunk) if not loud else 0
                         if silence_run >= silence_end and len(buf) >= min_utter:
                             push_state("thinking")
-                            text = transcribe_chunk(buf)
+                            effective_mode = args.stt_mode
+                            if effective_mode == "auto":
+                                effective_mode = "model" if _model_audio_capable else "external"
+                            if effective_mode == "model" and not _model_audio_capable:
+                                backend_log("[STT-MODEL] Model has no audio capability - falling back to external STT")
+                                effective_mode = "external"
+                            captured     = buf.copy()
                             buf          = np.zeros(0, dtype=np.float32)
                             preroll      = np.zeros(0, dtype=np.float32)
                             silence_run  = 0
                             was_speaking = False
-                            if text and should_process(text):
-                                print(f"[STT] Transcribed: {repr(text)}", flush=True)
-                                push_event({"type": "transcription", "text": text})
-                                handle_utterance(text)
+                            if effective_mode == "model":
+                                handle_utterance_with_audio(captured)
                             else:
-                                if text:
-                                    print(f"[STT] Filtered noise: {repr(text)}", flush=True)
+                                text = transcribe_chunk(captured)
+                                if text and should_process(text):
+                                    print(f"[STT] Transcribed: {repr(text)}", flush=True)
+                                    push_event({"type": "transcription", "text": text})
+                                    handle_utterance(text)
                                 else:
-                                    print("[STT] Empty transcription - ignoring", flush=True)
-                                push_state("idle")
+                                    if text:
+                                        print(f"[STT] Filtered noise: {repr(text)}", flush=True)
+                                    else:
+                                        print("[STT] Empty transcription - ignoring", flush=True)
+                                    push_state("idle")
                 time.sleep(0.005)
     except Exception as e:
         print(f"[STT] Stream error: {type(e).__name__}: {e}", flush=True)
@@ -596,14 +1050,179 @@ def handle_utterance(text: str):
         _bored = False
         push_event({"type": "wakeup"})
         backend_log("[BORED] Waking up - sending wakeup event.")
-    raw_reply, metrics = query_ollama(text)
-    spoken, explicit_anim = parse_reply(raw_reply)
-    push_event({"type": "response", "text": spoken})
-    emote = explicit_anim or pick_emote(spoken)
-    if emote:
-        push_event({"type": "emote", "name": emote})
-    log_conversation(text, raw_reply, spoken, emote, metrics)
-    speak_queue.put(spoken)
+
+    with _audio_lock:
+        device = None if args.tts_device == "default" else args.tts_device
+
+        # Phase 1: Stream LLM and collect all sentences
+        accumulator = SentenceAccumulator(max_chunk_words=10)
+        raw_reply = ""
+        sentences = []
+
+        try:
+            for token, full_reply_so_far in query_ollama_streaming(text):
+                raw_reply = full_reply_so_far
+                sentences.extend(accumulator.add_token(token))
+            sentences.extend(accumulator.flush())
+        except Exception as e:
+            backend_log(f"[PIPELINE] LLM error: {e}")
+            if not raw_reply:
+                raw_reply = random.choice(FALLBACK_RESPONSES)
+                sentences = [raw_reply]
+
+        # Phase 2: Push response text and emote immediately (bubble shows now)
+        spoken, explicit_anim = parse_reply(raw_reply)
+        emote = accumulator.pending_emote or explicit_anim or pick_emote(spoken)
+        push_event({"type": "response", "text": spoken})
+        if emote:
+            push_event({"type": "emote", "name": emote})
+
+        # Phase 3: TTS + audio playback
+        if mobile_connected:
+            mobile_seq = [0]
+
+            def mobile_sink(chunk_np, is_first=False, is_final=False):
+                import base64
+                pcm_int16 = (chunk_np.clip(-1, 1) * 32767).astype(np.int16).tobytes()
+                push_event({
+                    "type": "audio_chunk",
+                    "pcm_b64": base64.b64encode(pcm_int16).decode('ascii'),
+                    "sample_rate": TTS_RATE,
+                    "channels": 1,
+                    "dtype": "int16",
+                    "seq": mobile_seq[0],
+                    "is_first": is_first and mobile_seq[0] == 0,
+                    "is_final": is_final,
+                })
+                mobile_seq[0] += 1
+
+            for i, sentence in enumerate(sentences):
+                try:
+                    _stream_tts(sentence, mobile_sink, is_first=(i == 0))
+                except Exception as e:
+                    backend_log(f"[TTS] Error on sentence {repr(sentence[:30])}: {e}")
+            push_event({
+                "type": "audio_chunk",
+                "pcm_b64": "",
+                "sample_rate": TTS_RATE,
+                "seq": -1,
+                "is_first": False,
+                "is_final": True,
+            })
+            push_state("idle")
+        elif tts_model and tts_voice and sentences:
+            push_state("speaking")
+            backend_log(f"[TTS] Playing {len(sentences)} sentence(s)")
+            for sentence in sentences:
+                try:
+                    audio = tts_model.generate_audio(model_state=tts_voice, text_to_generate=sentence)
+                    audio_np = audio.squeeze().cpu().numpy() if hasattr(audio, 'squeeze') else np.array(audio).squeeze()
+                    if _tts_volume != 1.0:
+                        audio_np = audio_np * _tts_volume
+                    sd.play(audio_np.astype(np.float32), samplerate=TTS_RATE, device=device)
+                    sd.wait()
+                except Exception as e:
+                    backend_log(f"[TTS] Error on sentence {repr(sentence[:30])}: {e}")
+            push_state("idle")
+        else:
+            if sentences:
+                backend_log(f"[TTS] Skipped - tts_model={tts_model is not None} tts_voice={tts_voice is not None} sentences={len(sentences)}")
+            push_state("idle")
+
+        metrics = {
+            "elapsed": 0, "eval_count": 0, "tokens_per_sec": 0,
+            "context_messages": len(history), "fallback": False,
+        }
+        log_conversation(text, raw_reply, spoken, emote, metrics)
+
+
+def handle_utterance_with_audio(audio_input: np.ndarray):
+    """Handle a voice utterance using the model's native audio input. No user bubble is shown."""
+    global _bored, _last_activity
+    backend_log("[STT-MODEL] Processing audio utterance via model-native input")
+    _last_activity = time.time()
+    if _bored:
+        _bored = False
+        push_event({"type": "wakeup"})
+        backend_log("[BORED] Waking up - sending wakeup event.")
+
+    with _audio_lock:
+        device = None if args.tts_device == "default" else args.tts_device
+
+        accumulator = SentenceAccumulator(max_chunk_words=10)
+        raw_reply = ""
+        sentences = []
+
+        try:
+            for token, full_reply_so_far in query_ollama_streaming_with_audio(audio_input):
+                raw_reply = full_reply_so_far
+                sentences.extend(accumulator.add_token(token))
+            sentences.extend(accumulator.flush())
+        except Exception as e:
+            backend_log(f"[PIPELINE-AUDIO] LLM error: {e}")
+            if not raw_reply:
+                raw_reply = random.choice(FALLBACK_RESPONSES)
+                sentences = [raw_reply]
+
+        spoken, explicit_anim = parse_reply(raw_reply)
+        emote = accumulator.pending_emote or explicit_anim or pick_emote(spoken)
+        push_event({"type": "response", "text": spoken})
+        if emote:
+            push_event({"type": "emote", "name": emote})
+
+        if mobile_connected:
+            mobile_seq = [0]
+
+            def mobile_sink(chunk_np, is_first=False, is_final=False):
+                import base64
+                pcm_int16 = (chunk_np.clip(-1, 1) * 32767).astype(np.int16).tobytes()
+                push_event({
+                    "type": "audio_chunk",
+                    "pcm_b64": base64.b64encode(pcm_int16).decode('ascii'),
+                    "sample_rate": TTS_RATE,
+                    "channels": 1,
+                    "dtype": "int16",
+                    "seq": mobile_seq[0],
+                    "is_first": is_first and mobile_seq[0] == 0,
+                    "is_final": is_final,
+                })
+                mobile_seq[0] += 1
+
+            for i, sentence in enumerate(sentences):
+                try:
+                    _stream_tts(sentence, mobile_sink, is_first=(i == 0))
+                except Exception as e:
+                    backend_log(f"[TTS] Error on sentence {repr(sentence[:30])}: {e}")
+            push_event({
+                "type": "audio_chunk",
+                "pcm_b64": "", "sample_rate": TTS_RATE,
+                "seq": -1, "is_first": False, "is_final": True,
+            })
+            push_state("idle")
+        elif tts_model and tts_voice and sentences:
+            push_state("speaking")
+            backend_log(f"[TTS] Playing {len(sentences)} sentence(s)")
+            for sentence in sentences:
+                try:
+                    tts_out = tts_model.generate_audio(model_state=tts_voice, text_to_generate=sentence)
+                    tts_np = tts_out.squeeze().cpu().numpy() if hasattr(tts_out, 'squeeze') else np.array(tts_out).squeeze()
+                    if _tts_volume != 1.0:
+                        tts_np = tts_np * _tts_volume
+                    sd.play(tts_np.astype(np.float32), samplerate=TTS_RATE, device=device)
+                    sd.wait()
+                except Exception as e:
+                    backend_log(f"[TTS] Error on sentence {repr(sentence[:30])}: {e}")
+            push_state("idle")
+        else:
+            if sentences:
+                backend_log(f"[TTS] Skipped - tts_model={tts_model is not None} tts_voice={tts_voice is not None} sentences={len(sentences)}")
+            push_state("idle")
+
+        metrics = {
+            "elapsed": 0, "eval_count": 0, "tokens_per_sec": 0,
+            "context_messages": len(history), "fallback": False,
+        }
+        log_conversation("[voice message]", raw_reply, spoken, emote, metrics)
 
 # API Routes
 
@@ -678,6 +1297,37 @@ async def tts_audio(text: str):
         from fastapi import HTTPException
         raise HTTPException(500, str(e))
 
+@app.get("/tts-audio-stream")
+async def tts_audio_stream(text: str):
+    """Stream TTS audio as 16-bit PCM chunks. Low latency for HTTP clients."""
+    if not tts_model or not tts_voice:
+        from fastapi import HTTPException
+        raise HTTPException(503, "TTS not ready")
+
+    def audio_generator():
+        if _HAS_TTS_STREAM:
+            for chunk in tts_model.generate_audio_stream(
+                model_state=tts_voice, text_to_generate=text
+            ):
+                chunk_np = chunk.squeeze().cpu().numpy() if hasattr(chunk, 'cpu') else np.array(chunk).squeeze()
+                if chunk_np.size > 0:
+                    if _tts_volume != 1.0:
+                        chunk_np = chunk_np * _tts_volume
+                    yield (chunk_np.clip(-1, 1) * 32767).astype(np.int16).tobytes()
+        else:
+            audio = tts_model.generate_audio(model_state=tts_voice, text_to_generate=text)
+            chunk_np = audio.squeeze().cpu().numpy() if hasattr(audio, 'cpu') else np.array(audio).squeeze()
+            if _tts_volume != 1.0:
+                chunk_np = chunk_np * _tts_volume
+            yield (chunk_np.clip(-1, 1) * 32767).astype(np.int16).tobytes()
+
+    return StreamingResponse(
+        audio_generator(),
+        media_type="audio/pcm",
+        headers={"X-Sample-Rate": str(TTS_RATE), "X-Channels": "1", "X-Dtype": "int16"},
+    )
+
+
 @app.post("/stt-audio")
 async def stt_audio_endpoint(request: Request):
     wav_bytes = await request.body()
@@ -739,6 +1389,8 @@ def diagnose():
         "stt_model":         args.stt_model,
         "stt_device":        args.stt_device,
         "tts_device":        args.tts_device,
+        "audio_capable":     _model_audio_capable,
+        "stt_mode":          args.stt_mode,
     }
 
 @app.post("/start")
@@ -772,12 +1424,13 @@ def clear_history_endpoint():
 
 @app.post("/settings")
 async def update_settings(body: dict):
-    global stt_thread, stt_active, stt_model_obj, _context_size, _tts_volume, _system_prompt_suffix
+    global stt_thread, stt_active, stt_model_obj, _context_size, _tts_volume, _system_prompt_suffix, _model_audio_capable
     restart_stt_needed = False
 
     if "ollama_model" in body:
         args.ollama_model = body["ollama_model"]
         print(f"[LLM] Model → {args.ollama_model}", flush=True)
+        _model_audio_capable = check_model_audio_capability()
     if "ollama_endpoint" in body:
         args.ollama_endpoint = body["ollama_endpoint"]
         print(f"[LLM] Endpoint → {args.ollama_endpoint}", flush=True)
@@ -799,6 +1452,9 @@ async def update_settings(body: dict):
     if "tts_volume" in body:
         _tts_volume = float(body["tts_volume"])
         print(f"[TTS] Volume → {_tts_volume}", flush=True)
+    if "stt_mode" in body and body["stt_mode"] in ("auto", "model", "external"):
+        args.stt_mode = body["stt_mode"]
+        print(f"[STT] Mode → {args.stt_mode}", flush=True)
     if "debug_log" in body:
         _config["debug_log"] = bool(body["debug_log"])
         print(f"[DEBUG] Conversation log: {_config['debug_log']}", flush=True)

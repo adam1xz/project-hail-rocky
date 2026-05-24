@@ -27,7 +27,7 @@ export interface AppSettings {
   activityMode: 'active' | 'quiet' | 'sleep';
   systemPromptSuffix: string;
   ollama: { endpoint: string; model: string };
-  stt: { model: 'faster' | 'better'; device: string; language: string };
+  stt: { model: 'faster' | 'better'; device: string; language: string; mode: 'auto' | 'model' | 'external' };
   tts: { device: string; volume: number };
   debug: { showBorder: boolean; logConversation: boolean };
   contextSize: number;
@@ -62,7 +62,7 @@ const defaults: AppSettings = {
   activityMode: 'active',
   systemPromptSuffix: '',
   ollama: { endpoint: 'http://localhost:11434', model: 'Rockyv8:latest' },
-  stt: { model: 'better', device: 'default', language: 'auto' },
+  stt: { model: 'better', device: 'default', language: 'auto', mode: 'auto' },
   tts: { device: 'default', volume: 1.0 },
   debug: { showBorder: false, logConversation: false },
   contextSize: 12,

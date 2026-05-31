@@ -802,6 +802,7 @@ export default function SettingsApp() {
   const [animImportScript, setAnimImportScript] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved]   = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   const t = useCallback((key: string) => TR[lang]?.[key] ?? TR.en[key] ?? key, [lang]);
 
@@ -826,13 +827,15 @@ export default function SettingsApp() {
       api.getSettings(), api.getSkins(), api.getAnimations(),
       api.getOllamaModels(), api.getAudioDevices(),
       api.getDisplays?.() ?? Promise.resolve([]),
-    ]).then(([s, sk, an, om, ad, dp]) => {
+      (api as any).getMode?.() ?? Promise.resolve(null),
+    ]).then(([s, sk, an, om, ad, dp, mode]) => {
       setDraft(s);
       setLang((s.language as LangCode) || 'en');
       applyTheme(s.theme || 'night');
       setSkins(sk); setAnimations(an);
       setOllamaModels(om); setAudioDevices(ad);
       setDisplays(dp ?? []);
+      setIsMobile(mode === 'mobile');
     });
 
     api.navigateTab((t) => setTab(t as TabId));
@@ -967,7 +970,7 @@ export default function SettingsApp() {
       >
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 22px' }}>
           {tab === 'general' && (
-            <GeneralTab draft={draft} set={set} t={t} lang={lang}
+            <GeneralTab draft={draft} set={set} t={t} lang={lang} isMobile={isMobile}
               onResetAll={() => {
                 setDraft({ ...DEFAULT_SETTINGS });
                 setLang(DEFAULT_SETTINGS.language as LangCode);
@@ -975,7 +978,7 @@ export default function SettingsApp() {
               }}
             />
           )}
-          {tab === 'appearance' && <AppearanceTab draft={draft} set={set} t={t} displays={displays} isDev={!!draft.developerMode} />}
+          {tab === 'appearance' && <AppearanceTab draft={draft} set={set} t={t} displays={displays} isDev={!!draft.developerMode} isMobile={isMobile} />}
           {tab === 'animations' && (
             <AnimationsTab
               draft={draft} set={set} t={t} animations={animations}
@@ -1033,9 +1036,9 @@ export default function SettingsApp() {
   );
 }
 
-function GeneralTab({ draft, set, t, lang, onResetAll }: {
+function GeneralTab({ draft, set, t, lang, isMobile, onResetAll }: {
   draft: any; set: (k: string, v: any) => void;
-  t: (k: string) => string; lang: string; onResetAll: () => void;
+  t: (k: string) => string; lang: string; isMobile: boolean; onResetAll: () => void;
 }) {
   const [confirmReset, setConfirmReset] = useState(false);
   const isDev = !!draft.developerMode;
@@ -1053,9 +1056,11 @@ function GeneralTab({ draft, set, t, lang, onResetAll }: {
         <Row label={t('lbl_autostart')} tip={t('tip_autostart')}>
           <Toggle value={!!draft.autoStart} onChange={v => set('autoStart', v)} />
         </Row>
-        <Row label={t('lbl_pintop')} tip={t('tip_pintop')}>
-          <Toggle value={!!draft.pinToTop} onChange={v => set('pinToTop', v)} />
-        </Row>
+        {!isMobile && (
+          <Row label={t('lbl_pintop')} tip={t('tip_pintop')}>
+            <Toggle value={!!draft.pinToTop} onChange={v => set('pinToTop', v)} />
+          </Row>
+        )}
         <Row label={t('lbl_speech_bubbles')} tip={t('tip_speech_bubbles')}>
           <Toggle value={draft.speechBubbles !== false} onChange={v => set('speechBubbles', v)} />
         </Row>
@@ -1072,6 +1077,18 @@ function GeneralTab({ draft, set, t, lang, onResetAll }: {
         </Row>
         <Row label={t('lbl_developer_mode')} tip={t('tip_developer_mode')}>
           <Toggle value={isDev} onChange={v => set('developerMode', v)} />
+        </Row>
+      </Section>
+
+      <Section title="Mode">
+        <Row label={isMobile ? 'Mobile companion active' : 'Desktop overlay active'}>
+          <Btn
+            onClick={() => window.electronAPI?.selectMode?.(isMobile ? 'desktop' : 'mobile')}
+            outline
+            style={{ fontSize: 11 }}
+          >
+            {isMobile ? 'Switch to Desktop' : 'Switch to Mobile'}
+          </Btn>
         </Row>
       </Section>
 
@@ -1124,11 +1141,12 @@ function GeneralTab({ draft, set, t, lang, onResetAll }: {
   );
 }
 
-function AppearanceTab({ draft, set, t, displays, isDev }: {
+function AppearanceTab({ draft, set, t, displays, isDev, isMobile }: {
   draft: any; set: (k: string, v: any) => void;
   t: (k: string) => string;
   displays: Array<{ index: number; label: string }>;
   isDev: boolean;
+  isMobile: boolean;
 }) {
   return (
     <Section title={t('section_appearance')}>
@@ -1151,10 +1169,12 @@ function AppearanceTab({ draft, set, t, displays, isDev }: {
         onChange={v => set('scale', v)}
         fmt={v => `${v.toFixed(1)}x`}
       />
-      <Row label={t('lbl_corner')} tip={t('tip_corner')}>
-        <CornerPicker value={draft.corner ?? 'bottom-right'} onChange={v => set('corner', v)} t={t} />
-      </Row>
-      {displays.length > 1 && (
+      {!isMobile && (
+        <Row label={t('lbl_corner')} tip={t('tip_corner')}>
+          <CornerPicker value={draft.corner ?? 'bottom-right'} onChange={v => set('corner', v)} t={t} />
+        </Row>
+      )}
+      {!isMobile && displays.length > 1 && (
         <Row label={t('lbl_display')} tip={t('tip_display')}>
           <StyledSelect
             value={String(draft.displayIndex ?? 0)}
@@ -1163,7 +1183,7 @@ function AppearanceTab({ draft, set, t, displays, isDev }: {
           />
         </Row>
       )}
-      {isDev && (
+      {isDev && !isMobile && (
         <Row label={t('lbl_win_w')} tip={t('tip_win_w')}>
           <StyledInput
             value={String(draft.windowWidth ?? 750)}
@@ -1172,7 +1192,7 @@ function AppearanceTab({ draft, set, t, displays, isDev }: {
           />
         </Row>
       )}
-      {isDev && (
+      {isDev && !isMobile && (
         <Row label={t('lbl_win_h')} tip={t('tip_win_h')}>
           <StyledInput
             value={String(draft.windowHeight ?? 860)}
@@ -1181,7 +1201,7 @@ function AppearanceTab({ draft, set, t, displays, isDev }: {
           />
         </Row>
       )}
-      {isDev && (
+      {isDev && !isMobile && (
         <SliderRow
           label={t('lbl_floor_offset')} tip={t('tip_floor_offset')}
           min={-200} max={200} step={1} value={draft.floorOffset ?? 0}

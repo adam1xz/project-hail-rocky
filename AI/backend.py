@@ -27,7 +27,7 @@ from contextlib import asynccontextmanager
 try:
     from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
     from fastapi.middleware.cors import CORSMiddleware
-    from fastapi.responses import StreamingResponse
+    from fastapi.responses import StreamingResponse, FileResponse
     from fastapi.staticfiles import StaticFiles
     import uvicorn
 except ImportError:
@@ -36,7 +36,7 @@ except ImportError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "fastapi", "uvicorn[standard]", "-q"])
     from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
     from fastapi.middleware.cors import CORSMiddleware
-    from fastapi.responses import StreamingResponse
+    from fastapi.responses import StreamingResponse, FileResponse
     from fastapi.staticfiles import StaticFiles
     import uvicorn
 
@@ -85,8 +85,7 @@ _skin_dir = _backend_dir / ".." / "public" / "extracted_pieces"
 _skins_root = _backend_dir / ".." / "public" / "skins"
 _flutter_web_dir = _backend_dir / "flutter_web"
 
-if _skin_dir.exists():
-    app.mount("/skin", StaticFiles(directory=str(_skin_dir)), name="skin")
+_active_skin_id = "rocky"
 
 if _skins_root.exists():
     app.mount("/skins", StaticFiles(directory=str(_skins_root)), name="skins")
@@ -239,14 +238,22 @@ def should_process(text: str) -> bool:
         return False
     return True
 
+def _ws_queue_send(q: asyncio.Queue, evt: dict):
+    if q.full():
+        try:
+            q.get_nowait()
+        except asyncio.QueueEmpty:
+            pass
+    try:
+        q.put_nowait(evt)
+    except asyncio.QueueFull:
+        pass
+
 def push_event(evt: dict):
     event_queue.put(evt)
     if _loop and ws_queues:
         for q in list(ws_queues):
-            try:
-                _loop.call_soon_threadsafe(q.put_nowait, evt)
-            except Exception:
-                pass
+            _loop.call_soon_threadsafe(_ws_queue_send, q, evt)
 
 def push_state(state: str):
     push_event({"type": "ai_state", "state": state})
@@ -1248,10 +1255,38 @@ def get_settings():
         "context_size": _context_size,
         "debug_log": _config["debug_log"],
         "system_prompt_suffix": _system_prompt_suffix,
+        "active_skin": _active_skin_id,
     }
+
+@app.post("/skin-select")
+async def skin_select(body: dict):
+    global _active_skin_id
+    skin_id = str(body.get("id", "rocky"))
+    safe_id = skin_id.replace("/", "").replace("\\", "").replace("..", "")
+    _active_skin_id = safe_id
+    push_event({"type": "skin_changed", "skin_id": safe_id})
+    return {"ok": True, "skin_id": safe_id}
+
+@app.get("/skin/{filename}")
+async def serve_skin_file(filename: str):
+    safe = filename.replace("/", "").replace("\\", "").replace("..", "")
+    if _active_skin_id != "rocky":
+        p = _skins_root / _active_skin_id / safe
+        if p.exists():
+            return FileResponse(str(p))
+    p = _skin_dir / safe
+    if p.exists():
+        return FileResponse(str(p))
+    from fastapi import HTTPException
+    raise HTTPException(404, "skin file not found")
 
 @app.get("/skin-data")
 def skin_data():
+    if _active_skin_id != "rocky":
+        skin_json = _skins_root / _active_skin_id / "assembly_data.json"
+        if skin_json.exists():
+            with open(skin_json, encoding="utf-8") as f:
+                return json.load(f)
     skin_json = _backend_dir / ".." / "public" / "assembly_data.json"
     if not skin_json.exists():
         return []
@@ -1576,6 +1611,8 @@ async def websocket_endpoint(ws: WebSocket):
                         stt_thread = threading.Thread(target=stt_loop, daemon=True)
                         stt_thread.start()
                     push_event({"type": "mobile_mode", "active": False})
+                elif t == "request_desktop_mode":
+                    push_event({"type": "desktop_mode_requested"})
 
         await asyncio.gather(sender(), receiver())
     except (WebSocketDisconnect, Exception):

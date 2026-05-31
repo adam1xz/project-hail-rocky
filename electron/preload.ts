@@ -83,6 +83,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.removeAllListeners(channel);
   },
 
+  getMode: () => ipcRenderer.invoke('get-mode'),
+
   // Launcher
   selectMode: (mode: 'desktop' | 'mobile') =>
     ipcRenderer.send('launcher-mode', mode),

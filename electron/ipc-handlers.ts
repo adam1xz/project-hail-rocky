@@ -9,6 +9,14 @@ import { getCurrentQrData } from './qr-window';
 
 let pythonProcess: import('child_process').ChildProcess | null = null;
 let backendPort: number | null = null;
+let currentMode: 'desktop' | 'mobile' | null = null;
+
+export function setCurrentMode(mode: 'desktop' | 'mobile' | null): void {
+  currentMode = mode;
+}
+export function getCurrentMode(): 'desktop' | 'mobile' | null {
+  return currentMode;
+}
 
 export function registerIpcHandlers(spawnBackend: () => Promise<void>): void {
 
@@ -30,6 +38,8 @@ export function registerIpcHandlers(spawnBackend: () => Promise<void>): void {
 
   ipcMain.handle('get-settings', () => store.store);
 
+  ipcMain.handle('get-mode', () => currentMode);
+
   ipcMain.handle('save-settings', (_e, settings: Partial<typeof store.store>) => {
     const prev = store.store;
     Object.entries(settings).forEach(([k, v]) => store.set(k as any, v));
@@ -41,7 +51,14 @@ export function registerIpcHandlers(spawnBackend: () => Promise<void>): void {
       win.setAlwaysOnTop(settings.pinToTop);
     }
     if (settings.skin !== undefined && settings.skin !== prev.skin) {
-      win.webContents.send('set-skin', settings.skin);
+      win?.webContents.send('set-skin', settings.skin);
+      if (currentMode === 'mobile' && backendPort) {
+        fetch(`http://localhost:${backendPort}/skin-select`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: settings.skin }),
+        }).catch(() => {});
+      }
     }
     if ((settings.scale !== undefined && settings.scale !== prev.scale) ||
         (settings.corner !== undefined && settings.corner !== prev.corner) ||

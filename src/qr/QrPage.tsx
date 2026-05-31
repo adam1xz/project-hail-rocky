@@ -124,6 +124,36 @@ export function QrPage() {
         </p>
       )}
 
+      <div style={{ height: 16 }} />
+
+      <button
+        onClick={() => window.electronAPI?.openSettings?.()}
+        style={{
+          width: '100%', padding: '9px 0', borderRadius: 8, border: '1px solid #2e2e3c',
+          background: '#1c1c22', color: '#b8a98a', cursor: 'pointer',
+          fontFamily: 'Manrope, system-ui, sans-serif', fontSize: 12, fontWeight: 600,
+          marginBottom: 8, transition: 'border-color 0.15s, color 0.15s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = '#c9a84c'; e.currentTarget.style.color = '#c9a84c'; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = '#2e2e3c'; e.currentTarget.style.color = '#b8a98a'; }}
+      >
+        Open Settings
+      </button>
+
+      <button
+        onClick={() => window.electronAPI?.selectMode?.('desktop')}
+        style={{
+          width: '100%', padding: '9px 0', borderRadius: 8, border: '1px solid #2e2e3c',
+          background: '#1c1c22', color: '#6e6252', cursor: 'pointer',
+          fontFamily: 'Manrope, system-ui, sans-serif', fontSize: 12, fontWeight: 600,
+          transition: 'border-color 0.15s, color 0.15s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = '#c94c4c'; e.currentTarget.style.color = '#c94c4c'; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = '#2e2e3c'; e.currentTarget.style.color = '#6e6252'; }}
+      >
+        Switch to Desktop
+      </button>
+
       <style>{`
         @keyframes spin {
           to { transform: rotate(360deg); }

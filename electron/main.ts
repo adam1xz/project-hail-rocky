@@ -6,7 +6,7 @@ import { spawn, ChildProcess } from 'child_process';
 import { createCharacterWindow, getCharacterWindow } from './character-window';
 import { createSettingsWindow, getSettingsWindow } from './settings-window';
 import { createTray, setMobileMode } from './tray';
-import { registerIpcHandlers, setPythonProcess, setBackendPort, getBackendPort } from './ipc-handlers';
+import { registerIpcHandlers, setPythonProcess, setBackendPort, getBackendPort, setCurrentMode, getCurrentMode } from './ipc-handlers';
 import { createLauncherWindow, closeLauncher } from './launcher-window';
 import { createQrWindow, setQrData } from './qr-window';
 import { store } from './store';
@@ -21,7 +21,7 @@ function getArg(name: string): string | null {
 
 let pythonProc: ChildProcess | null = null;
 let isQuitting = false;
-let currentMode: 'desktop' | 'mobile' | null = null;
+// currentMode is tracked in ipc-handlers via setCurrentMode/getCurrentMode
 
 function getLanIp(): string {
   const ifaces = os.networkInterfaces();
@@ -107,7 +107,7 @@ async function spawnBackend(): Promise<void> {
           startEventStream(port);
           setTimeout(() => autoSelectModel(port).catch(() => {}), 2000);
 
-          if (currentMode === 'mobile') {
+          if (getCurrentMode() === 'mobile') {
             const host = getLanIp();
             setQrData({
               url: `rocky://connect?host=${host}&port=${port}`,
@@ -176,6 +176,10 @@ function startEventStream(port: number): void {
 }
 
 function handleBackendEvent(evt: { type: string; [k: string]: any }): void {
+  if (evt.type === 'desktop_mode_requested') {
+    switchToDesktop();
+    return;
+  }
   const win = getCharacterWindow();
   if (!win) return;
   switch (evt.type) {
@@ -188,7 +192,7 @@ function handleBackendEvent(evt: { type: string; [k: string]: any }): void {
 }
 
 function switchToDesktop(): void {
-  currentMode = 'desktop';
+  setCurrentMode('desktop');
   closeLauncher();
   setMobileMode(false);
   createCharacterWindow(preloadPath);
@@ -204,7 +208,7 @@ function switchToDesktop(): void {
 }
 
 function switchToMobile(): void {
-  currentMode = 'mobile';
+  setCurrentMode('mobile');
   closeLauncher();
   setMobileMode(true);
   createQrWindow(preloadPath);
@@ -249,14 +253,14 @@ app.whenReady().then(async () => {
   }
 
   app.on('activate', () => {
-    if (currentMode === 'desktop' && BrowserWindow.getAllWindows().filter(w => !w.isDestroyed()).length === 0) {
+    if (getCurrentMode() === 'desktop' && BrowserWindow.getAllWindows().filter(w => !w.isDestroyed()).length === 0) {
       createCharacterWindow(preloadPath);
     }
   });
 });
 
 app.on('window-all-closed', () => {
-  if (currentMode === null) {
+  if (getCurrentMode() === null) {
     app.quit();
   }
 });

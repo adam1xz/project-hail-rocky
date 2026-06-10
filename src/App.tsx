@@ -1209,7 +1209,6 @@ export default function App() {
       const now = performance.now();
       const time = now / 1000;
 
-      // Physics integration (Verlet spring)
       const dt = 1 / 60;
       integratePhysics(dt);
 
@@ -1413,7 +1412,6 @@ export default function App() {
         }
       }
 
-      // Apply rocky offset to stage div
       if (stageRef.current) {
         stageRef.current.style.transform =
           `translate3d(${r.x.toFixed(2)}px, ${r.y.toFixed(2)}px, 0)`;
@@ -1548,7 +1546,6 @@ export default function App() {
       svgRef.current.getElementById('back_element_2')?.setAttribute('transform', `translate(0, ${b2})`);
       svgRef.current.getElementById('back_element_3')?.setAttribute('transform', `translate(0, ${b3})`);
 
-      // Update Legs and Hands (Inverse Kinematics)
       [...RIG.legs, ...RIG.hands].forEach(limb => {
         const thighAbsX = s.body.x + (limb.thighPivot.x - RIG.body.pivot.x);
         const thighAbsY = currentBodyY + (limb.thighPivot.y - RIG.body.pivot.y);
@@ -1580,7 +1577,6 @@ export default function App() {
         if (footEl) footEl.setAttribute('transform', `rotate(${rot2.toFixed(3)})`);
       });
 
-      // Procedural Walk Cycle Logic
       if (!dragRef.current.isDragging && !isStudioMode && !isPlayingSequence) {
         let anyStepping = false;
 

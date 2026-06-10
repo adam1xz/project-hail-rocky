@@ -85,12 +85,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   getMode: () => ipcRenderer.invoke('get-mode'),
 
-  // Launcher
   selectMode: (mode: 'desktop' | 'mobile') =>
     ipcRenderer.send('launcher-mode', mode),
   closeApp: () => ipcRenderer.send('close-app'),
 
-  // QR window
   getQrData: () => ipcRenderer.invoke('get-qr-data'),
   onQrData: (cb: (data: { url: string; webUrl: string; host: string; port: number }) => void) => {
     ipcRenderer.on('qr-data', (_e, data) => cb(data));

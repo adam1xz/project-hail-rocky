@@ -1,7 +1,9 @@
 {
   "name": "rocky-desktop",
-  "private": true,
   "version": "1.0.0",
+  "description": "Rocky - an AI desktop companion powered by a local LLM (Ollama) with physics, animation, and voice.",
+  "author": "adam1xz",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",

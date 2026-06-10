@@ -27,7 +27,10 @@ SKIN/run.bat
 # Temp / one-off outputs
 listf_output.txt
 metadata.json
-update/
+
+# Launcher build artifacts
+launcher/*.exe
+launcher/*.ahk
 
 # OS / editor
 .DS_Store

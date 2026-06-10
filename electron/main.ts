@@ -21,7 +21,6 @@ function getArg(name: string): string | null {
 
 let pythonProc: ChildProcess | null = null;
 let isQuitting = false;
-// currentMode is tracked in ipc-handlers via setCurrentMode/getCurrentMode
 
 function getLanIp(): string {
   const ifaces = os.networkInterfaces();
@@ -231,7 +230,6 @@ function switchToMobile(): void {
 app.whenReady().then(async () => {
   registerIpcHandlers(spawnBackend);
 
-  // Register launcher mode selection
   ipcMain.on('launcher-mode', (_e, mode: 'desktop' | 'mobile') => {
     if (mode === 'desktop') switchToDesktop();
     else switchToMobile();

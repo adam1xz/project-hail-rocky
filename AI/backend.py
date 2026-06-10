@@ -79,7 +79,6 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Rocky Backend", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# Static file mounts - conditional on directory existence
 _backend_dir = Path(__file__).parent
 _skin_dir = _backend_dir / ".." / "public" / "extracted_pieces"
 _skins_root = _backend_dir / ".." / "public" / "skins"
@@ -103,7 +102,7 @@ stt_model_obj = None
 history: list = []
 _stop_stt     = threading.Event()
 _models_ready = threading.Event()
-_config               = {"debug_log": True}
+_config               = {"debug_log": False}
 _context_size         = 12
 _tts_volume           = 1.0
 _system_prompt_suffix = ""
@@ -797,8 +796,6 @@ def query_ollama_streaming(user_text: str):
             yield fallback, fallback
 
 
-# STT
-
 def load_stt():
     global stt_model_obj
     try:
@@ -842,11 +839,12 @@ def query_ollama_streaming_with_audio(audio_np: np.ndarray):
     """Stream Ollama response for an audio user message (model-native STT)."""
     import base64
 
-    # Save debug copy so the clip can be inspected
-    debug_wav_path = _log_dir / "debug_audio_latest.wav"
-    sf.write(str(debug_wav_path), audio_np, SAMPLE_RATE)
     duration = len(audio_np) / SAMPLE_RATE
-    backend_log(f"[STT-MODEL] Audio clip: {duration:.2f}s, saved to {debug_wav_path}")
+    backend_log(f"[STT-MODEL] Audio clip: {duration:.2f}s")
+    if _config["debug_log"]:
+        debug_wav_path = _log_dir / "debug_audio_latest.wav"
+        sf.write(str(debug_wav_path), audio_np, SAMPLE_RATE)
+        backend_log(f"[STT-MODEL] Saved debug copy to {debug_wav_path}")
 
     wav_buf = io.BytesIO()
     sf.write(wav_buf, audio_np, SAMPLE_RATE, format="WAV")
@@ -1231,7 +1229,6 @@ def handle_utterance_with_audio(audio_input: np.ndarray):
         }
         log_conversation("[voice message]", raw_reply, spoken, emote, metrics)
 
-# API Routes
 
 @app.get("/status")
 def status():
@@ -1621,7 +1618,6 @@ async def websocket_endpoint(ws: WebSocket):
         if q in ws_queues:
             ws_queues.remove(q)
 
-# Startup
 
 def find_free_port() -> int:
     with socket.socket() as s:

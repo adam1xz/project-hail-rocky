@@ -63,8 +63,16 @@ Rocky runs headless-ish; the character window has no taskbar entry. The tray ico
 
 ## Mobile
 
-When you pick Mobile mode, the backend binds to `0.0.0.0` and a QR window appears with the connection URL. Scan it with the Rocky companion app ([PHR - APP](https://github.com/adam1xz/project-hail-rocky-app)) and Rocky shows up on your phone with accelerometer-based gravity. The desktop handles all the AI; the phone just renders and handles mic input.
+When you pick Mobile mode, the backend binds to `0.0.0.0` and a QR window appears with the connection URL. Scan it with the Rocky companion app ([PHR - APP](https://github.com/adam1xz)) and Rocky shows up on your phone with accelerometer-based gravity. The desktop handles all the AI; the phone just renders and handles mic input.
 
 ---
 
 *"Rocky is engineer. Fix things. Build things. Keep engines running."*
+
+---
+
+## License
+
+[PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/) — free for personal and non-commercial use.
+
+The Rocky name, character, and visual likeness are the intellectual property of Andy Weir and Amazon MGM Studios. This is an unofficial fan project, not affiliated with or endorsed by either. If you are a rights holder with concerns, please open an issue.

@@ -1,24 +1,3 @@
-"""
-skin_layout.py - Generate layout.json for a skin folder.
-
-Mirrors AutoSkinImage (PHR - MAIN/src/App.tsx:147-219) but precomputed offline:
-  - SVG path centroid + principal axis from 200 uniformly-sampled points
-    along the path arc length.
-  - PNG centroid + principal axis from non-transparent pixels.
-
-Output schema (one entry per part present in the skin folder):
-  {
-    "filename": "leg1_main.png",
-    "groupId":  "leg1_main",       // or null for body_main
-    "svg":      { "cx": ..., "cy": ..., "angle": ..., "extent": ..., "skew": ... },
-    "png":      { "cx": ..., "cy": ..., "angle": ..., "extent": ..., "skew": ...,
-                  "w": ..., "h": ... }
-  }
-
-Drop-in callable: generate_for_skin(skin_dir). The splitter calls this so
-imports auto-sync; the backend reads the result via /skin-layout.
-"""
-
 import json
 import math
 import re
@@ -31,9 +10,6 @@ import numpy as np
 from skin_parts import DRAW_ORDER, PARTS
 
 PATH_SAMPLES = 200
-
-
-# --- SVG path -> polyline ---------------------------------------------------
 
 _TOKEN_RE = re.compile(r"[MmLlHhVvCcSsQqTtAaZz]|-?\d*\.?\d+(?:[eE][+-]?\d+)?")
 _CMD_RE = re.compile(r"[MmLlHhVvCcSsQqTtAaZz]")
@@ -69,21 +45,21 @@ def _quadratic(p0, p1, p2, steps=18):
     return pts
 
 
-def path_to_polyline(d: str):
-    """Flatten an SVG path 'd' string into a list of (x, y) vertices.
+def _prepend(value, iterator):
+    yield value
+    for x in iterator:
+        yield x
 
-    Handles every command used in the rocky clip paths: M, L, H, V, Q, T, C, S,
-    Z and their lowercase relative counterparts. Bezier curves are sampled
-    densely enough that the downstream PCA matches the browser within 0.1%.
-    """
+
+def path_to_polyline(d: str):
     tokens = _tokenize(d)
     it = iter(tokens)
     pts: list[tuple[float, float]] = []
 
     cur = (0.0, 0.0)
     start = (0.0, 0.0)
-    prev_ctrl = None   # last cubic control (for S/s)
-    prev_qctrl = None  # last quadratic control (for T/t)
+    prev_ctrl = None
+    prev_qctrl = None
     cmd: Optional[str] = None
 
     def add(p):
@@ -97,7 +73,6 @@ def path_to_polyline(d: str):
             if _CMD_RE.fullmatch(tok):
                 cmd = tok
             else:
-                # Re-feed the number we just consumed
                 it = _prepend(tok, it)
                 if cmd is None:
                     raise ValueError("path starts without a command")
@@ -108,7 +83,6 @@ def path_to_polyline(d: str):
                     x, y = cur[0] + x, cur[1] + y
                 add((x, y))
                 start = cur
-                # Implicit lineto for subsequent coordinate pairs
                 cmd = "L" if cmd == "M" else "l"
             elif cmd in ("L", "l"):
                 x, y = _take_numbers(it, 2)
@@ -149,7 +123,6 @@ def path_to_polyline(d: str):
                 if cmd == "s":
                     xs = [xs[0] + cur[0], xs[1] + cur[1],
                           xs[2] + cur[0], xs[3] + cur[1]]
-                # Reflected control: 2*cur - prev_ctrl (or cur itself if none)
                 if prev_ctrl is not None:
                     p1 = (2 * cur[0] - prev_ctrl[0], 2 * cur[1] - prev_ctrl[1])
                 else:
@@ -196,14 +169,7 @@ def path_to_polyline(d: str):
     return pts
 
 
-def _prepend(value, iterator):
-    yield value
-    for x in iterator:
-        yield x
-
-
 def _resample_uniform(pts, n):
-    """Resample a polyline to n points spaced uniformly by arc length."""
     if len(pts) < 2:
         return pts[:]
     cum = [0.0]
@@ -218,7 +184,7 @@ def _resample_uniform(pts, n):
     target = 0.0
     j = 0
     for i in range(n):
-        target = (i / n) * total  # match getPointAtLength's [0, len) sampling
+        target = (i / n) * total
         while j + 1 < len(pts) and cum[j + 1] < target:
             j += 1
         if j + 1 >= len(pts):
@@ -232,10 +198,7 @@ def _resample_uniform(pts, n):
     return out
 
 
-# --- moments ----------------------------------------------------------------
-
 def _moments_from_points(points):
-    """PCA + projection extent + skew, identical to App.tsx:147-173."""
     N = len(points)
     if N == 0:
         return None
@@ -267,7 +230,6 @@ def _moments_from_points(points):
 
 
 def _moments_from_png(png_path: Path):
-    """Same algorithm App.tsx:175-219 runs on the browser canvas."""
     img = cv2.imread(str(png_path), cv2.IMREAD_UNCHANGED)
     if img is None or img.ndim < 3 or img.shape[2] < 4:
         return None
@@ -297,11 +259,7 @@ def _moments_from_png(png_path: Path):
     }
 
 
-# --- public API -------------------------------------------------------------
-
 def generate_for_skin(skin_dir: Path) -> Path:
-    """Compute layout for every part PNG present in skin_dir and write
-    layout.json into the same folder. Returns the output path."""
     skin_dir = Path(skin_dir)
     entries = []
     for name in DRAW_ORDER:

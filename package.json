@@ -48,6 +48,9 @@
     "appId": "com.rocky.desktop",
     "productName": "Rocky",
     "icon": "public/icon.png",
+    "directories": {
+      "output": "dist-installer"
+    },
     "files": [
       "dist/**/*",
       "dist-electron/**/*",

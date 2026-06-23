@@ -130,56 +130,44 @@ var
 
 procedure CreateQrPage;
 var
-  QrLbl:     TLabel;
-  TextLbl:   TLabel;
-  ManualLbl: TLabel;
-  SkipNote:  TLabel;
+  HeadLbl:  TLabel;
+  BodyLbl:  TLabel;
+  LinkLbl:  TLabel;
+  NoteLbl:  TLabel;
 begin
   QrPage := CreateCustomPage(wpSelectComponents,
     'Rocky on Android',
-    'Get the Rocky companion app on your Android phone.');
+    'The companion app is coming soon.');
 
-  QrLbl := TLabel.Create(QrPage);
-  QrLbl.Parent    := QrPage.Surface;
-  QrLbl.Caption   := 'QR';
-  QrLbl.Font.Size := 28;
-  QrLbl.Font.Style := [fsBold];
-  QrLbl.Left      := 14;
-  QrLbl.Top       := 20;
-  QrLbl.Width     := 120;
-  QrLbl.Height    := 120;
-  QrLbl.Alignment := taCenter;
+  HeadLbl := TLabel.Create(QrPage);
+  HeadLbl.Parent     := QrPage.Surface;
+  HeadLbl.Caption    := 'Coming Soon';
+  HeadLbl.Font.Size  := 18;
+  HeadLbl.Font.Style := [fsBold];
+  HeadLbl.Left       := 0;
+  HeadLbl.Top        := 16;
+  HeadLbl.Width      := 420;
+  HeadLbl.Alignment  := taCenter;
 
-  TextLbl := TLabel.Create(QrPage);
-  TextLbl.Parent    := QrPage.Surface;
-  TextLbl.Caption   := 'Scan this code with your Android phone' + #13#10 +
-                        'to install the Rocky companion app.';
-  TextLbl.Left      := 152;
-  TextLbl.Top       := 14;
-  TextLbl.Width     := 280;
-  TextLbl.WordWrap  := True;
-  TextLbl.Font.Size := 10;
+  LinkLbl := TLabel.Create(QrPage);
+  LinkLbl.Parent    := QrPage.Surface;
+  LinkLbl.Caption   := 'github.com/adam1xz';
+  LinkLbl.Left      := 0;
+  LinkLbl.Top       := 80;
+  LinkLbl.Width     := 420;
+  LinkLbl.Alignment := taCenter;
+  LinkLbl.Font.Size := 9;
+  LinkLbl.Font.Color := clNavy;
 
-  ManualLbl := TLabel.Create(QrPage);
-  ManualLbl.Parent    := QrPage.Surface;
-  ManualLbl.Caption   := 'Manual download:' + #13#10 +
-    'github.com/adam1xz/project-hail-rocky-app/releases' + #13#10 + #13#10 +
-    'You can also connect by entering your PC' + #39 + 's IP' + #13#10 +
-    'address manually in the Rocky app settings.';
-  ManualLbl.Left     := 152;
-  ManualLbl.Top      := 70;
-  ManualLbl.Width    := 280;
-  ManualLbl.WordWrap := True;
-  ManualLbl.Font.Size := 9;
-
-  SkipNote := TLabel.Create(QrPage);
-  SkipNote.Parent    := QrPage.Surface;
-  SkipNote.Caption   := 'This screen is informational - click Next to continue.';
-  SkipNote.Left      := 0;
-  SkipNote.Top       := 160;
-  SkipNote.Width     := 420;
-  SkipNote.Font.Size := 8;
-  SkipNote.Font.Color := clGray;
+  NoteLbl := TLabel.Create(QrPage);
+  NoteLbl.Parent    := QrPage.Surface;
+  NoteLbl.Caption   := 'Click Next to continue.';
+  NoteLbl.Left      := 0;
+  NoteLbl.Top       := 110;
+  NoteLbl.Width     := 420;
+  NoteLbl.Alignment := taCenter;
+  NoteLbl.Font.Size := 8;
+  NoteLbl.Font.Color := clGray;
 end;
 
 { ---- Autostart task (created in ssPostInstall) ---- }

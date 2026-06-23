@@ -1,28 +1,3 @@
-"""
-skin_parts.py - Static metadata for every body part rendered by Rocky.
-
-Each entry binds a part name (matching the splitter PNG filename, without .png)
-to:
-  - groupId   - which SVG group the part lives inside. The Flutter renderer uses
-                this to apply the right IK or breathing transform at runtime.
-                None means the part has no animated parent group (body_main).
-  - clip_d    - the SVG path 'd' attribute of the vector silhouette that the
-                skin PNG fills in MAIN. Used by the layout generator to compute
-                centroid + principal axis, mirroring AutoSkinImage.
-
-Source: PHR - MAIN/src/App.tsx defs block (clipPath entries) and the SVG
-group hierarchy that wraps each part. Kept in sync manually because the
-clip paths are stable design data.
-"""
-
-# groupId tells the Flutter renderer which animated transform to apply:
-#   back_element_<n>  -> translateY(back_y[n-1])     (breathing)
-#   leg<N>_main       -> mainM (thigh IK rotation)
-#   leg<N>_foot       -> footM (thigh + knee IK rotation)
-#   leg3_foot_small   -> footM (rides with leg3_foot)
-#   hand<N>_main      -> mainM
-#   hand<N>_foot      -> footM
-#   None              -> no animated parent transform (body_main only)
 PARTS = {
     "back_1": {
         "groupId": "back_element_1",
@@ -86,8 +61,6 @@ PARTS = {
     },
 }
 
-# Render order matches MAIN's SVG draw order so layered limbs cover each other
-# correctly. Back/body first, then legs (back-to-front), then hands.
 DRAW_ORDER = [
     "back_1", "back_2", "back_3",
     "body_main",

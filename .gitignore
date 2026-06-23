@@ -21,9 +21,6 @@ SKIN/Gemini rocky*.png
 SKIN/New Project.*
 SKIN/run.bat
 
-# Claude Code internal
-.claude/
-
 # Temp / one-off outputs
 listf_output.txt
 metadata.json

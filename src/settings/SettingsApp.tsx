@@ -1910,7 +1910,7 @@ function CreditsTab({ t }: { t: (k: string) => string; isDev: boolean; draft: an
           </button>
         </div>
         <p style={{ fontSize: 11.5, color: 'var(--text-2)', lineHeight: 1.55, margin: 0 }}>
-          Trained Qwen to act like Rocky.
+          Trained Qwen and Gemma to act like Rocky.
         </p>
       </div>
 

@@ -15,6 +15,10 @@ from typing import Optional
 import re
 import tempfile
 import os
+import shutil
+
+os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS", "1")
+
 from collections import deque
 import numpy as np
 import sounddevice as sd
@@ -42,7 +46,8 @@ except ImportError:
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--voice-ref",       default="update/tts/_rocky_mono.wav")
+parser.add_argument("--voice-ref",         default="update/tts/_rocky_mono.wav")
+parser.add_argument("--tts-clone-weights", default="update/tts/pocket-tts-cloning-english.safetensors")
 parser.add_argument("--ollama-endpoint", default="http://localhost:11434")
 parser.add_argument("--ollama-model",    default="Rockyv8:latest")
 parser.add_argument("--stt-model",       choices=["faster", "better"], default="better")
@@ -307,9 +312,35 @@ def log_conversation(user: str, raw_reply: str, spoken: str, emote: Optional[str
     lines.append("---")
     _write_log(f'conversation_{date}.log', '\n'.join(lines) + '\n')
 
+def _assemble_split_file_if_needed(path: Path) -> None:
+    """Reassembles a file shipped as <name>.partNN chunks (kept under GitHub's 100MB limit)."""
+    if path.exists():
+        return
+    parts = sorted(path.parent.glob(path.name + ".part*"))
+    if not parts:
+        return
+    print(f"[TTS] Assembling {path.name} from {len(parts)} parts...", flush=True)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    with open(tmp_path, "wb") as out:
+        for part in parts:
+            with open(part, "rb") as f:
+                shutil.copyfileobj(f, out)
+    tmp_path.rename(path)
+
 def load_tts():
     global tts_model, tts_voice, _HAS_TTS_STREAM
     try:
+        _clone_weights = Path(args.tts_clone_weights)
+        _assemble_split_file_if_needed(_clone_weights)
+        if _clone_weights.exists():
+            import pocket_tts.models.tts_model as _ptts_module
+            _orig_download_if_necessary = _ptts_module.download_if_necessary
+            def _download_if_necessary_with_bundled_weights(file_path):
+                if file_path.startswith("hf://kyutai/pocket-tts/languages/english/model.safetensors"):
+                    return _clone_weights
+                return _orig_download_if_necessary(file_path)
+            _ptts_module.download_if_necessary = _download_if_necessary_with_bundled_weights
+
         from pocket_tts import TTSModel
         print("Loading TTS...", flush=True)
         tts_model = TTSModel.load_model()

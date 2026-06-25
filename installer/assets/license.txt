@@ -84,9 +84,13 @@ Ollama (https://ollama.com) - MIT License
 Python (https://python.org) - PSF License
 FastAPI - MIT License
 Electron - MIT License
+Pocket-TTS (https://huggingface.co/kyutai/pocket-tts) by Kyutai - CC-BY-4.0
 
 The Rocky v8 language model is a custom fine-tuned model distributed via
 Ollama Hub. Use of the model is subject to the underlying base model license.
+
+Rocky's voice is generated locally using Kyutai's Pocket-TTS model, cloned
+from a voice sample owned by the developer.
 
 ---
 

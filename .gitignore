@@ -25,6 +25,10 @@ SKIN/run.bat
 listf_output.txt
 metadata.json
 
+# Reassembled at runtime from update/tts/*.part* - see backend.py _assemble_split_file_if_needed
+update/tts/pocket-tts-cloning-english.safetensors
+update/tts/*.safetensors.tmp
+
 # Launcher build artifacts
 launcher/*.exe
 launcher/*.ahk

@@ -49,7 +49,7 @@
     "productName": "Rocky",
     "icon": "public/icon.png",
     "directories": {
-      "output": "dist-installer"
+      "output": "dist-release"
     },
     "files": [
       "dist/**/*",

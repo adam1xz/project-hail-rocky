@@ -76,10 +76,15 @@ async function spawnBackend(): Promise<void> {
     ? path.join(__dirname, '../update/tts/_rocky_mono.wav')
     : path.join(installDir!, 'update/tts/_rocky_mono.wav');
 
+  const ttsCloneWeights = isDev
+    ? path.join(__dirname, '../update/tts/pocket-tts-cloning-english.safetensors')
+    : path.join(installDir!, 'update/tts/pocket-tts-cloning-english.safetensors');
+
   const s = store.store;
   const args = [
     backendPath,
     '--voice-ref', voiceRef,
+    '--tts-clone-weights', ttsCloneWeights,
     '--ollama-endpoint', s.ollama.endpoint,
     '--ollama-model', s.ollama.model,
     '--stt-model', s.stt.model,

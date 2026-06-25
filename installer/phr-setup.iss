@@ -76,8 +76,12 @@ Source: "..\public\extracted_pieces\*"; DestDir: "{app}\backend\public\extracted
 Source: "..\public\skins\*"; DestDir: "{app}\backend\public\skins"; \
   Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 
-; Voice reference
+; Voice reference + TTS voice-cloning weights (Kyutai pocket-tts, CC-BY-4.0)
+; Weights ship as <100MB .partNN chunks (GitHub's file size limit) and are
+; reassembled automatically on first backend launch - see backend.py
 Source: "..\update\tts\_rocky_mono.wav"; DestDir: "{app}\update\tts"; \
+  Flags: ignoreversion skipifsourcedoesntexist
+Source: "..\update\tts\pocket-tts-cloning-english.safetensors.part*"; DestDir: "{app}\update\tts"; \
   Flags: ignoreversion skipifsourcedoesntexist
 
 ; Post-install helper scripts (extracted to temp, auto-deleted after [Run])
@@ -85,6 +89,13 @@ Source: "scripts\write-config.ps1";  DestDir: "{tmp}"; Flags: deleteafterinstall
 Source: "scripts\setup-backend.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall; Components: backend
 Source: "scripts\setup-ollama.ps1";  DestDir: "{tmp}"; Flags: deleteafterinstall; Components: ollama
 Source: "scripts\pull-model.ps1";    DestDir: "{tmp}"; Flags: deleteafterinstall; Components: model
+
+[UninstallDelete]
+; Inno's auto-uninstall only removes files it itself installed via [Files].
+; The Python venv (and any pip/pycache leftovers) is created at runtime by
+; setup-backend.ps1 and is invisible to that mechanism, which left {app}
+; non-empty and undeleted. Force-remove the whole tree instead.
+Type: filesandordirs; Name: "{app}"
 
 [Icons]
 Name: "{autodesktop}\{#MyAppName}";          Filename: "{app}\{#MyAppExeName}"; \
@@ -131,7 +142,6 @@ var
 procedure CreateQrPage;
 var
   HeadLbl:  TLabel;
-  BodyLbl:  TLabel;
   LinkLbl:  TLabel;
   NoteLbl:  TLabel;
 begin
@@ -205,21 +215,34 @@ end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
-  PhrDir: String;
+  PhrDir, RockyLogDir, SettingsDir, Listing: String;
 begin
   case CurUninstallStep of
 
     usUninstall: begin
-      PhrDir := GetEnv('USERPROFILE') + '\.phr';
-      if DirExists(PhrDir) then begin
+      { .phr: legacy install/setup logs. .rocky: runtime conversation/debug
+        logs (backend.py). rocky-desktop: electron-store settings + browser
+        caches (Electron's userData dir, named after package.json "name"). }
+      PhrDir      := GetEnv('USERPROFILE') + '\.phr';
+      RockyLogDir := GetEnv('USERPROFILE') + '\.rocky';
+      SettingsDir := GetEnv('APPDATA') + '\rocky-desktop';
+
+      Listing := '';
+      if DirExists(PhrDir)      then Listing := Listing + #13#10 + PhrDir;
+      if DirExists(RockyLogDir) then Listing := Listing + #13#10 + RockyLogDir;
+      if DirExists(SettingsDir) then Listing := Listing + #13#10 + SettingsDir;
+
+      if Listing <> '' then begin
         if MsgBox(
           'Delete Rocky user data?' + #13#10#13#10 +
-          'Location: ' + PhrDir + #13#10 +
-          '(chat history, settings, logs)' + #13#10#13#10 +
+          'Locations:' + Listing + #13#10#13#10 +
+          '(chat history, settings, logs, cache)' + #13#10#13#10 +
           'Click Yes to delete. Click No to keep it.',
           mbConfirmation, MB_YESNO) = IDYES then
         begin
-          DelTree(PhrDir, True, True, True);
+          if DirExists(PhrDir)      then DelTree(PhrDir, True, True, True);
+          if DirExists(RockyLogDir) then DelTree(RockyLogDir, True, True, True);
+          if DirExists(SettingsDir) then DelTree(SettingsDir, True, True, True);
         end;
       end;
     end;
